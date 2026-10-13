@@ -1,0 +1,127 @@
+/**
+ * Ink on Cream, the same palette and type pairing as the Split Tally
+ * documentation: cream paper, cobalt ink, a serif for headings and Inter for
+ * reading. One accent (vermilion) is kept for the depot in diagrams.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --cv-cream: #f4f0e5;
+  --cv-cream-deep: #ebe5d6;
+  --cv-cobalt: #2547c9;
+  --cv-navy: #1b2b6b;
+  --cv-ink-soft: #5a679e;
+  --cv-vermilion: #c0391b;
+
+  --ifm-color-primary: #2547c9;
+  --ifm-color-primary-dark: #2140b5;
+  --ifm-color-primary-darker: #1f3caa;
+  --ifm-color-primary-darkest: #1a318c;
+  --ifm-color-primary-light: #3a58d3;
+  --ifm-color-primary-lighter: #4763d6;
+  --ifm-color-primary-lightest: #6a81de;
+
+  --ifm-background-color: #f4f0e5;
+  --ifm-background-surface-color: #ebe5d6;
+  --ifm-font-color-base: #1b2b6b;
+  --ifm-heading-color: #1b2b6b;
+
+  --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --ifm-heading-font-family: 'Cormorant Garamond', Georgia, serif;
+  --ifm-heading-font-weight: 500;
+
+  --ifm-code-font-size: 92%;
+  --docusaurus-highlighted-code-line-bg: rgba(37, 71, 201, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #7f9bff;
+  --ifm-color-primary-dark: #5d80ff;
+  --ifm-color-primary-darker: #4c72ff;
+  --ifm-color-primary-darkest: #1a4bff;
+  --ifm-color-primary-light: #a1b6ff;
+  --ifm-color-primary-lighter: #b2c4ff;
+  --ifm-color-primary-lightest: #e5eaff;
+
+  --ifm-background-color: #131a35;
+  --ifm-background-surface-color: #1b2445;
+  --ifm-font-color-base: #e8ecfb;
+  --ifm-heading-color: #f2f4ff;
+  --docusaurus-highlighted-code-line-bg: rgba(127, 155, 255, 0.16);
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
+}
+
+.markdown h1:first-child {
+  font-size: 2.8rem;
+}
+
+/**
+ * Numbered figures, diagrams and tables are wrapped in this so the caption
+ * and the artwork centre together. Captions sit above the thing they name.
+ */
+.cv-figure {
+  text-align: center;
+  margin: 2rem 0;
+}
+
+.cv-figure table {
+  margin-left: auto;
+  margin-right: auto;
+  display: table;
+}
+
+.cv-figure p {
+  text-align: center;
+}
+
+.cv-figure p strong {
+  color: var(--cv-ink-soft);
+  font-weight: 500;
+}
+
+[data-theme='dark'] .cv-figure p strong {
+  color: #a9b6e6;
+}
+
+.docusaurus-mermaid-container {
+  display: flex;
+  justify-content: center;
+}
+
+/* Tables read as ledgers rather than as grids. */
+.markdown table th {
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cv-ink-soft);
+  font-weight: 500;
+}
+
+[data-theme='dark'] .markdown table th {
+  color: #a9b6e6;
+}
+
+/* Wide content scrolls inside its own box; the page never scrolls sideways. */
+.markdown table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+/* Task checklists: a little air between items so they read as a list of work. */
+.markdown ul.contains-task-list li {
+  margin-bottom: 0.3rem;
+}
