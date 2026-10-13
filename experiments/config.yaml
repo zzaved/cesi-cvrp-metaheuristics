@@ -1,0 +1,35 @@
+# Benchmark configuration read by experiments/run_benchmark.py.
+#
+# Synthetic instances are generated on the fly, so `make benchmark` works on a
+# fresh clone. VRPLIB instances are skipped with a warning until they are
+# downloaded into data/ (see data/README.md).
+#
+# TODO(Person 3): grow this to the final list of at least 20 instances covering
+# every scenario in docs/content/experimentation/instances.md.
+
+output: results/benchmark.csv
+seeds: [1, 2, 3, 4, 5]          # final study: 10 seeds per (instance, algorithm)
+time_limit: 10                  # seconds per run; final study: scale with n
+
+algorithms:
+  nn: {}                        # nearest neighbor only (baseline)
+  nn_ls: {}                     # nearest neighbor + local search
+  alns:
+    iterations: 2000
+    destroy_min: 0.1
+    destroy_max: 0.3
+    segment: 100
+    reaction: 0.1
+    cooling: 0.99975
+
+instances:
+  synthetic:
+    - {n: 50, distribution: uniform, seed: 1, capacity: 100}
+    - {n: 50, distribution: clustered, seed: 1, capacity: 100}
+    - {n: 100, distribution: uniform, seed: 2, capacity: 150}
+    - {n: 100, distribution: clustered, seed: 2, capacity: 150}
+  vrplib:
+    - {path: data/cvrplib/A/A-n32-k5.vrp, solution: data/cvrplib/A/A-n32-k5.sol}
+    - {path: data/cvrplib/X/X-n101-k25.vrp, solution: data/cvrplib/X/X-n101-k25.sol}
+  solomon:
+    - {path: data/solomon/C101.txt, best_known: null}
