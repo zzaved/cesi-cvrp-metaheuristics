@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data and results: instances are downloaded, results are regenerated.
+data/*
+!data/README.md
+results/*
+!results/.gitkeep
+
+# Documentation site (Docusaurus)
+docs/node_modules/
+docs/build/
+docs/.docusaurus/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
+
+# Local working notes that are not part of the project
+Claude Código Prompt.md

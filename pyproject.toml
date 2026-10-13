@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cvrp"
+version = "0.1.0"
+description = "Delivery route optimization (CVRP and CVRPTW) for the ADEME smart mobility call: ILP model, Python metaheuristic solver, VRPLIB benchmarks and statistical experimental study."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "Pablo Azevedo" }, { name = "Dag" }, { name = "Farida" }]
+keywords = [
+  "vehicle-routing", "cvrp", "cvrptw", "operations-research", "metaheuristics",
+  "alns", "simulated-annealing", "integer-linear-programming", "vrplib",
+]
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "matplotlib>=3.8",
+  "scipy>=1.11",
+  "vrplib>=1.4",
+  "pulp>=2.8",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6", "jupyter>=1.0", "nbconvert>=7.0"]
+fast = ["numba>=0.59"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 99
+target-version = "py311"
+extend-exclude = ["docs", "notebooks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "D"]
+ignore = ["D105", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
