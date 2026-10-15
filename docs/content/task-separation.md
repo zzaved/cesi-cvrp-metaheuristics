@@ -17,7 +17,7 @@ The names are not assigned yet: we pick who takes which lane in the
 | Lane | Person | Name |
 | --- | --- | --- |
 | Modeling and exact methods | Person 1 | _to assign_ |
-| Metaheuristic engine | Person 2 | _to assign_ |
+| Metaheuristic engine | Person 2 | Dagmawi |
 | Data, experiments and communication | Person 3 | _to assign_ |
 
 :::
