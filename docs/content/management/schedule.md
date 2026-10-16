@@ -15,7 +15,7 @@ gantt
   axisFormat %d %b
   section Milestones
   Kickoff                         :milestone, m0, 2026-10-13, 0d
-  Modeling check (Prosit 3)       :milestone, m1, 2026-10-23, 0d
+  Modeling check (Prosit 3)       :milestone, m1, 2026-10-19, 0d
   Final deliverable               :milestone, m2, 2026-11-12, 0d
   Presentation                    :milestone, m3, 2026-11-13, 0d
   section Person 1

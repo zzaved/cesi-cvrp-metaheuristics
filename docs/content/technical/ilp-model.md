@@ -6,7 +6,7 @@ title: ILP model
 # Integer linear programming model
 
 Owner: **Person 1**. Feeds section 6 of notebook 01 and section 3 and 4 of the final deliverable.
-Code: `src/cvrp/ilp.py` (TODO P1-06, P1-09). Notation: [Modeling](./modeling.md).
+Code: `src/cvrp/ilp.py`. Notation: [Modeling](./modeling.md).
 
 ## Two-index formulation with MTZ constraints (CVRP)
 
@@ -86,9 +86,26 @@ so MTZ (5) is no longer strictly needed, but keeping it helps the solver.
 | Lower bound | LP relaxation, or best bound when the time limit stops the solver | how far any solution can be from optimal |
 | Upper bound | best integer found by the ILP, or the metaheuristic | what we can actually deliver |
 
+## Formulation choice (tested in notebook 01)
+
+Three ways to forbid subtours and enforce capacity on the same two-index core were compared on 18
+instances (A and B cut to n = 6 to 16, six complete P instances), HiGHS, one thread, 60 s:
+
+| Formulation | Proven optimal | Median time | Mean root gap |
+| --- | --- | --- | --- |
+| A: MTZ load variables (above) | 7 / 18 | 60 s (time limit) | 48 % |
+| B: single-commodity flow (Gavish and Graves, 1978) | **18 / 18** | 1.9 s | 19 % |
+| C: rounded capacity cuts, cutting plane | 17 / 18 | 0.06 s | 1.7 % |
+
+**Decision:** B is the ILP of the model (reliable, polynomial size, fully written out); C is kept
+as a lower bound generator for the final deliverable; A is dropped. The CVRPTW model is B plus
+constraints (7) to (9). All optima match the published values on the P instances, and the full
+Solomon C101 is solved to its optimum 828.94 (exact distances). Code: `solve_cvrp_mtz`,
+`solve_cvrp_flow`, `solve_cvrp_rcc`, `solve_cvrptw` in `src/cvrp/ilp.py`.
+
 ## TODO (Person 1)
 
-- [ ] Implement `solve_cvrp_mtz` and test it on the tiny instance (known optimum).
-- [ ] Table: n against solve time and gap between bounds, n = 5 to 20.
-- [ ] Implement `solve_cvrptw`; test on a truncated Solomon instance (first 10 to 15 customers).
-- [ ] Decide PuLP with CBC or OR-Tools (decision at kickoff).
+- [x] Implement `solve_cvrp_mtz` and test it on the tiny instance (known optimum).
+- [ ] Table: n against solve time and gap between bounds, n = 5 to 20 (first version in notebook 01, section 9).
+- [x] Implement `solve_cvrptw`; test on a truncated Solomon instance (first 10 to 15 customers).
+- [x] Decide PuLP with CBC or OR-Tools: PuLP with HiGHS (`highspy`), since PuLP 4 found no CBC.
