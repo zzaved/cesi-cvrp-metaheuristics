@@ -21,6 +21,7 @@ dependencies = [
   "scipy>=1.11",
   "vrplib>=1.4",
   "pulp>=2.8",
+  "highspy>=1.7",  # MIP solver used by cvrp.ilp (PuLP 4 found no CBC)
   "pyyaml>=6.0",
 ]
 
