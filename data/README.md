@@ -27,9 +27,22 @@ data/
 | Solomon | SINTEF TOP, [sintef.no/projectweb/top/vrptw](https://www.sintef.no/projectweb/top/vrptw/) | `instance_format="solomon"` |
 | Gehring and Homberger | same SINTEF page | `instance_format="solomon"` |
 
-Status: **to verify**. CVRPLIB moved in 2025 from `vrp.galgos.inf.puc-rio.br` to
-`galgos.inf.puc-rio.br/cvrplib`, and the old direct file links now return 404. Download from the
-website, place the files as above, and record here the exact URL you used.
+CVRPLIB moved in 2025 from `vrp.galgos.inf.puc-rio.br` to `galgos.inf.puc-rio.br/cvrplib`, and
+the old direct file links now return 404.
+
+### URLs used (16 October 2026)
+
+Files needed by `notebooks/01_modeling_check.ipynb`:
+
+| Files | URL |
+| --- | --- |
+| `cvrplib/P/*` (whole set P, `.7z`, extract with `bsdtar -xf P.7z`) | `https://galgos.inf.puc-rio.br/cvrplib/index.php/en/download/instance-set/12` |
+| `cvrplib/A/A-n32-k5.{vrp,sol}` | `https://raw.githubusercontent.com/PyVRP/VRPLIB/main/tests/data/A-n32-k5.vrp` (and `.sol`) |
+| `cvrplib/B/B-n31-k5.{vrp,sol}` | `https://raw.githubusercontent.com/PyVRP/VRPLIB/main/tests/data/B-n31-k5.vrp` (and `.sol`) |
+| `solomon/C101.{txt,sol}` | `https://raw.githubusercontent.com/PyVRP/VRPLIB/main/tests/data/C101.txt` (and `.sol`) |
+
+Other CVRPLIB sets follow the same pattern (`download/instance-set/<id>`: 4 is A, 5 is B, 9 is
+E, 12 is P). The whole A and B sets are still to download for the experimental study.
 
 Each `.vrp` should come with its `.sol` file (best known solution): its cost is used for the gap.
 For Solomon instances, write the best known value in `config.yaml` (`best_known:`) and cite where it
