@@ -64,32 +64,49 @@ def _two_index(inst: Instance, relax: bool) -> tuple[pulp.LpProblem, dict]:
     at most K routes, every route that leaves the depot comes back.
     """
     n = inst.n_customers
-    nodes = range(n + 1)
+    nodes = range(n + 1)  # 0 is the depot, 1..n are the customers (V+)
+    # Binary for the real model; continuous in [0, 1] for the LP relaxation (lower bound).
     cat = pulp.LpContinuous if relax else pulp.LpBinary
     prob = pulp.LpProblem(inst.name.replace("-", "_"), pulp.LpMinimize)
+    # x_ij = 1 if some truck drives directly from i to j. One variable per ordered pair i != j:
+    # it says whether the trip is used, not which truck uses it, nor how much it carries.
     x = {
         (i, j): prob.add_variable(f"x_{i}_{j}", 0, 1, cat) for i in nodes for j in nodes if i != j
     }
+    # Objective: total travel time. c_ij * x_ij counts c_ij only when the trip is used.
     prob += pulp.lpSum(float(inst.dist[i, j]) * var for (i, j), var in x.items())
     for i in range(1, n + 1):
+        # (1) exactly one trip leaves customer i
         prob += pulp.lpSum(x[i, j] for j in nodes if j != i) == 1, f"out_{i}"
+        # (2) exactly one trip enters customer i
         prob += pulp.lpSum(x[j, i] for j in nodes if j != i) == 1, f"in_{i}"
+    # (3) each trip leaving the depot is one truck: at most K of them (K is a limit, not a target)
     prob += pulp.lpSum(x[0, j] for j in range(1, n + 1)) <= _fleet(inst), "fleet"
+    # (4) as many trips back into the depot as out of it: every truck comes back
     prob += (
         pulp.lpSum(x[0, j] for j in range(1, n + 1))
         == pulp.lpSum(x[i, 0] for i in range(1, n + 1)),
         "return",
     )
+    # (1) to (4) still allow subtours (3 -> 4 -> 3) and overloaded routes: each formulation
+    # below adds its own constraints to forbid both.
     return prob, x
 
 
 def _add_mtz(prob: pulp.LpProblem, x: dict, inst: Instance) -> None:
     """MTZ load constraints (5) and (6): u_j >= u_i + q_j - Q (1 - x_ij), q_i <= u_i <= Q."""
     n, q, cap = inst.n_customers, inst.demands.tolist(), float(inst.capacity)
+    # u_i = load already delivered when the truck leaves customer i.
+    # (6) is written as variable bounds: q_i <= u_i <= Q.
     u = {i: prob.add_variable(f"u_{i}", float(q[i]), float(cap)) for i in range(1, n + 1)}
     for i in range(1, n + 1):
         for j in range(1, n + 1):
             if i != j:
+                # (5) if the truck goes i -> j, the delivered load grows by q_j.
+                # (1 - x_ij) is 0 when the trip is used and 1 when it is not, so the
+                # "- Q (1 - x_ij)" term vanishes on used trips and switches the constraint
+                # off on unused ones (big-M with M = Q). Around a loop of customers u would
+                # have to grow forever, which is impossible: no subtours.
                 prob += u[j] >= u[i] + q[j] - cap * (1 - x[i, j]), f"mtz_{i}_{j}"
 
 
@@ -104,18 +121,29 @@ def _add_flow(prob: pulp.LpProblem, x: dict, inst: Instance) -> None:
     for (i, j), var in x.items():
         if j == 0:
             continue  # trucks come back empty: f_i0 = 0, so no variable is needed
+        # f_ij >= 0 = load on board while driving from i to j (continuous, not binary).
         f[i, j] = prob.add_variable(f"f_{i}_{j}", 0)
+        # (6) lower bound: on a used trip the truck carries at least what j ordered.
+        # On an unused trip (x_ij = 0) both bounds give 0 <= f_ij <= 0: no load moves.
         prob += f[i, j] >= q[j] * var, f"flow_lo_{i}_{j}"
+        # (6) upper bound: Q - q_i = capacity minus what was just dropped at i, so the load
+        # never exceeds Q. Leaving the depot q_0 = 0 and the bound is Q itself.
         prob += f[i, j] <= (cap - q[i]) * var, f"flow_up_{i}_{j}"
     for j in range(1, n + 1):
-        inflow = pulp.lpSum(f[i, j] for i in range(n + 1) if i != j)
-        outflow = pulp.lpSum(f[j, k] for k in range(1, n + 1) if k != j)
+        inflow = pulp.lpSum(f[i, j] for i in range(n + 1) if i != j)  # load arriving at j
+        outflow = pulp.lpSum(f[j, k] for k in range(1, n + 1) if k != j)  # load leaving j
+        # (5) flow balance: load in minus load out = what stayed at j, i.e. its demand q_j.
+        # Goods only come out of the depot, so a loop of customers has no source of load
+        # and cannot satisfy this: no subtours.
         prob += inflow - outflow == q[j], f"flow_bal_{j}"
 
 
 def _add_rcc(prob: pulp.LpProblem, x: dict, inst: Instance, subset: frozenset, tag: int) -> None:
     """Rounded capacity cut: at least ceil(q(S) / Q) arcs enter the customer set S."""
+    # Trucks needed for S: total demand of S divided by Q, rounded up. EPS is subtracted only
+    # to absorb floating point noise (e.g. 2.0000001 must round up to 2, not 3).
     need = float(math.ceil(inst.demands[list(subset)].sum() / inst.capacity - EPS))
+    # Arcs entering S: from any node i outside S (depot included) to a node j inside S.
     prob += (
         pulp.lpSum(x[i, j] for j in subset for i in range(inst.n_customers + 1) if i not in subset)
         >= need,
@@ -125,9 +153,13 @@ def _add_rcc(prob: pulp.LpProblem, x: dict, inst: Instance, subset: frozenset, t
 
 def _solve(prob: pulp.LpProblem, time_limit: float) -> tuple[str, float | None, float | None]:
     """Run HiGHS; return (status, objective, best bound)."""
+    # One thread and a time limit, identical for every formulation, so the comparison is fair.
     solver = pulp.HiGHS(msg=False, timeLimit=max(time_limit, 1.0), threads=1)
     stats = prob.solve(solver)
+    # obj: best solution found (an upper bound on the optimum).
     obj = pulp.value(prob.objective) if stats.has_solution else None
+    # bound: best lower bound proven by branch and bound; for an LP it is the LP value itself.
+    # When obj == bound the solution is proven optimal.
     bound = prob.solverModel.getInfo().mip_dual_bound if stats.is_mip else obj
     if bound is not None and not math.isfinite(bound):
         bound = None
@@ -150,6 +182,8 @@ def _decode(x: dict, n: int) -> tuple[list[list[int]], list[list[int]]]:
     succ = _successors(x)
     seen: set[int] = set()
     routes = []
+    # Each arc leaving the depot starts one route: follow the unique successor of every
+    # customer (constraint (1)) until the route returns to 0.
     for start in succ.get(0, []):
         route, node = [], start
         while node != 0 and node not in seen:
@@ -157,6 +191,7 @@ def _decode(x: dict, n: int) -> tuple[list[list[int]], list[list[int]]]:
             route.append(node)
             node = succ[node][0]
         routes.append(route)
+    # Customers not reached from the depot lie on subtours (loops that never visit 0).
     cycles = []
     for v in range(1, n + 1):
         if v in seen or v not in succ:
@@ -249,6 +284,7 @@ def _violated_fractional(x: dict, inst: Instance, cuts: set[frozenset]) -> list[
     for threshold in (EPS, 0.3, 0.5, 0.7, 0.99):
         for s in _components(x, n, threshold):
             need = math.ceil(inst.demands[list(s)].sum() / inst.capacity - EPS)
+            # Violated: fewer trucks enter S (in the fractional solution) than S needs.
             if s not in cuts and s not in found and _inflow(x, s, n) < need - EPS:
                 found.append(s)
     return found
@@ -276,6 +312,7 @@ def solve_cvrp_rcc(
     def left() -> float:
         return time_limit - (time.perf_counter() - start)
 
+    # Phase 1: LP relaxation (x continuous), tightened with cuts until none is found.
     prob, x = _two_index(inst, relax=True)
     lp_bound, status = None, "NoSolution"
     while rounds < max_rounds and left() > 0:
@@ -302,6 +339,7 @@ def solve_cvrp_rcc(
             rounds,
         )
 
+    # Phase 2: integer model (x binary) with the cuts of phase 1, then the referee loop.
     prob, x = _two_index(inst, relax=False)
     for tag, s in enumerate(cuts):
         _add_rcc(prob, x, inst, s, tag)
@@ -314,9 +352,12 @@ def solve_cvrp_rcc(
         if status != "Optimal":
             break
         routes, cycles = _decode(x, n)
+        # Every subtour (inflow 0 < 1) and every overloaded route (inflow 1 < 2 or more)
+        # breaks a cut (5C): add it and solve again.
         heavy = [r for r in routes if inst.demands[r].sum() > inst.capacity + EPS]
         violated = [frozenset(s) for s in cycles + heavy]
         if not violated:
+            # Optimal for a relaxation of the CVRP and feasible for the CVRP: proven optimal.
             return _result(prob, x, inst, status, obj, obj, start, rounds)
         for s in violated:
             _add_rcc(prob, x, inst, s, len(cuts))
@@ -346,16 +387,25 @@ def solve_cvrptw(inst: Instance, time_limit: float = 60.0, relax: bool = False) 
     n = inst.n_customers
     ready, due, c = inst.ready_times.tolist(), inst.due_times.tolist(), inst.dist.tolist()
     s = inst.service_times.tolist() if inst.service_times is not None else [0.0] * (n + 1)
+    # Core (1) to (4) plus the flow (5) and (6) of the chosen formulation B: capacity.
     prob, x = _two_index(inst, relax)
     _add_flow(prob, x, inst)
+    # t_i = time service starts at i. (8) windows written as bounds: e_i <= t_i <= l_i.
     t = {i: prob.add_variable(f"t_{i}", ready[i], due[i]) for i in range(n + 1)}
     for i in range(n + 1):
         for j in range(1, n + 1):
             if i != j:
+                # Smallest M that switches (7) off when x_ij = 0: the latest finish-and-drive
+                # time from i (l_i + s_i + c_ij) minus the earliest start at j (e_j). With it,
+                # the right side is at most e_j, which t_j always satisfies.
                 big_m = max(0.0, due[i] + s[i] + c[i][j] - ready[j])
+                # (7) if the truck goes i -> j, service at j starts after service at i ends
+                # and the drive is done. ">=" (not "=") is what allows waiting.
                 prob += t[j] >= t[i] + s[i] + c[i][j] - big_m * (1 - x[i, j]), f"time_{i}_{j}"
     for i in range(1, n + 1):
+        # Same idea for the return: latest arrival at the depot from i minus closing time l_0.
         big_m = max(0.0, due[i] + s[i] + c[i][0] - due[0])
+        # (9) a truck that ends its route at i is back before the depot closes.
         prob += t[i] + s[i] + c[i][0] <= due[0] + big_m * (1 - x[i, 0]), f"back_{i}"
     status, obj, bound = _solve(prob, time_limit)
     return _result(prob, x, inst, status, obj, bound, start, relax=relax)
