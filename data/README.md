@@ -39,7 +39,7 @@ Files needed by `notebooks/01_modeling_check.ipynb`:
 | `cvrplib/P/*` (whole set P, `.7z`, extract with `bsdtar -xf P.7z`) | `https://galgos.inf.puc-rio.br/cvrplib/index.php/en/download/instance-set/12` |
 | `cvrplib/A/A-n32-k5.{vrp,sol}` | `https://raw.githubusercontent.com/PyVRP/VRPLIB/main/tests/data/A-n32-k5.vrp` (and `.sol`) |
 | `cvrplib/B/B-n31-k5.{vrp,sol}` | `https://raw.githubusercontent.com/PyVRP/VRPLIB/main/tests/data/B-n31-k5.vrp` (and `.sol`) |
-| `solomon/C101.{txt,sol}` | `https://raw.githubusercontent.com/PyVRP/VRPLIB/main/tests/data/C101.txt` (and `.sol`) |
+| `solomon/*.{txt,sol}` (all 56) | `https://raw.githubusercontent.com/PyVRP/VRPLIB/main/tests/data/cvrplib/Vrp-Set-Solomon/<name>.txt` (and `.sol`) |
 
 Other CVRPLIB sets follow the same pattern (`download/instance-set/<id>`: 4 is A, 5 is B, 9 is
 E, 12 is P). The whole A and B sets are still to download for the experimental study.
@@ -52,6 +52,8 @@ comes from in `docs/content/experimentation/instances.md`.
 
 - CVRPLIB `EUC_2D` distances are **rounded to the nearest integer** (`round_euc2d=True`), which is
   the convention under which the best known costs are published.
-- Solomon distances are kept exact (no rounding). Check that the best known values you compare
-  against use the same convention, otherwise the gap is meaningless.
+- Solomon: the loader keeps exact distances, but the best known costs of the PyVRP/VRPLIB copy
+  (all 56 `.sol` files, checked on 7 November 2026) use distances **truncated to one decimal**
+  (`distance_matrix(coords, rounding="floor1")`). Use that convention for every gap, otherwise
+  each gap is about 0.3 % too high (C101: 828.94 exact, 827.3 truncated, same routes).
 - Synthetic instances (`Instance.random`) need no download and are generated from a seed.
