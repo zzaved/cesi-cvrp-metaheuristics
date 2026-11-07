@@ -88,7 +88,8 @@ class GRASPParams:
         tw_weight: Weight of the time push-forward in the insertion score
             (Solomon I1 idea); 0 means pure distance.
         perturb_kicks: Kick-and-descend rounds after each descent (0 = plain GRASP).
-        time_limit: Optional wall-clock limit in seconds (checked between iterations).
+        time_limit: Optional wall-clock limit in seconds, checked between
+            iterations and between kicks (the current descent always finishes).
     """
 
     alpha: float = 0.1
@@ -758,6 +759,8 @@ def grasp(
             _eliminate_routes(m, st, rng)
         _LocalSearch(m, st, rng, p).run()
         for _ in range(p.perturb_kicks):
+            if p.time_limit is not None and time.perf_counter() - t0 > p.time_limit:
+                break
             cand = _kick(m, st, rng)
             _LocalSearch(m, cand, rng, p).run()
             if len(cand.routes) <= m.K and cand.cost() < st.cost() - EPS:

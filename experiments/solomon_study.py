@@ -14,11 +14,14 @@ Protocol
 Usage:
     python experiments/solomon_study.py tune   # -> results/solomon_tuning.csv
     python experiments/solomon_study.py run    # -> results/solomon_benchmark.csv
+    python experiments/solomon_study.py tune grasp   # one algorithm only
+    python experiments/solomon_study.py run grasp    # -> results/solomon_benchmark_grasp.csv
 """
 
 from __future__ import annotations
 
 import itertools
+import os
 import platform
 import sys
 from multiprocessing import Pool
@@ -29,6 +32,9 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from types import SimpleNamespace  # noqa: E402
+
+from cvrp.grasp import GRASPParams, grasp  # noqa: E402
 from cvrp.instance import Instance  # noqa: E402
 from cvrp.tabu import TabuParams, distance_cost, tabu_search  # noqa: E402
 from cvrp.utils import distance_matrix  # noqa: E402
@@ -36,7 +42,8 @@ from cvrp.utils import distance_matrix  # noqa: E402
 DATA = ROOT / "data" / "solomon"
 RESULTS = ROOT / "results"
 TIME_LIMIT = 20.0  # seconds per run
-WORKERS = 7  # parallel runs (one core left free)
+# parallel runs: one core left free, never more runs than cores (each run must get its 20 s)
+WORKERS = max(1, min(7, (os.cpu_count() or 2) - 1))
 TUNING = ["C101", "C201", "R101", "R201", "RC101", "RC201"]
 TUNE_SEEDS = [101, 102]
 TEST_SEEDS = list(range(1, 11))  # 10 seeds per (instance, algorithm)
@@ -60,9 +67,25 @@ def _tabu(inst: Instance, cost, params: dict, seed: int):
     return tabu_search(inst, cost, TabuParams(time_limit=TIME_LIMIT, **params), seed)
 
 
+def _grasp(inst: Instance, cost, params: dict, seed: int):
+    """GRASP (Farida): restarts until the time limit; perturb_kicks > 0 = GRASP-ILS."""
+    params = dict(params)
+    limit = params.pop("time_limit", TIME_LIMIT)  # only overridden for quick notebook checks
+    res = grasp(inst, GRASPParams(iterations=10**9, time_limit=limit, **params), seed=seed)
+    if res.best is None or not res.best.is_feasible(inst):  # shared evaluator, time windows too
+        raise RuntimeError(f"GRASP found no feasible solution on {inst.name}")
+    return SimpleNamespace(
+        routes=res.best.routes, cost=res.cost, seconds=res.runtime, iterations=res.iterations
+    )
+
+
 # name -> (solver, tuning grid)
 ALGORITHMS = {
     "tabu": (_tabu, {"tenure": [5, 10, 20], "candidates": [50, 200, 500]}),
+    "grasp": (
+        _grasp,
+        {"alpha": [0.1, 0.3, 0.5], "improvement": ["first", "best"], "perturb_kicks": [0, 90]},
+    ),
 }
 
 
@@ -119,20 +142,31 @@ def best_params(tuning: pd.DataFrame, algo: str) -> dict:
     return eval(t.idxmin())  # noqa: S307  (our own str(dict))
 
 
+def tune_jobs(algos: list[str]) -> list:
+    """Every (tuning instance, algorithm, parameters, seed)."""
+    return [
+        (n, a, p, s)
+        for a in algos
+        for n in TUNING
+        for p in grid(ALGORITHMS[a][1])
+        for s in TUNE_SEEDS
+    ]
+
+
+def test_jobs(chosen: dict[str, dict]) -> list:
+    """Every (test instance, algorithm, chosen parameters, seed)."""
+    test = sorted(p.stem for p in DATA.glob("*.txt") if p.stem not in TUNING)
+    return [(n, a, p, s) for n in test for a, p in chosen.items() for s in TEST_SEEDS]
+
+
 if __name__ == "__main__":
     phase = sys.argv[1] if len(sys.argv) > 1 else "run"
+    only = sys.argv[2:]  # optional algorithm names, e.g. `run grasp`
+    algos = only or list(ALGORITHMS)
+    suffix = "_" + "_".join(only) if only else ""
     if phase == "tune":
-        jobs = [
-            (n, a, p, s)
-            for a, (_, g) in ALGORITHMS.items()
-            for n in TUNING
-            for p in grid(g)
-            for s in TUNE_SEEDS
-        ]
-        run(jobs, RESULTS / "solomon_tuning.csv")
+        run(tune_jobs(algos), RESULTS / f"solomon_tuning{suffix}.csv")
     else:
-        tuning = pd.read_csv(RESULTS / "solomon_tuning.csv")
-        chosen = {a: best_params(tuning, a) for a in ALGORITHMS}
-        test = sorted(p.stem for p in DATA.glob("*.txt") if p.stem not in TUNING)
-        jobs = [(n, a, p, s) for n in test for a, p in chosen.items() for s in TEST_SEEDS]
-        run(jobs, RESULTS / "solomon_benchmark.csv")
+        tuning = pd.read_csv(RESULTS / f"solomon_tuning{suffix}.csv")
+        chosen = {a: best_params(tuning, a) for a in algos}
+        run(test_jobs(chosen), RESULTS / f"solomon_benchmark{suffix}.csv")
