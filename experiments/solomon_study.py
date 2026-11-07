@@ -1,0 +1,138 @@
+"""Benchmark of Tabu Search on the 56 Solomon CVRPTW instances.
+
+Protocol
+- Instances: data/solomon/*.txt with their best known solution (*.sol), PyVRP/VRPLIB copy.
+- Objective: total distance, travel time = distance, distances truncated to one decimal (the
+  convention of the best known values), so gap = 100 (cost - BKS) / BKS is valid.
+- Tuning set: the first instance of each class (C101, C201, R101, R201, RC101, RC201).
+  Test set: the other 50. No test instance is used to choose a parameter.
+- Same start (time-oriented nearest neighbor) and same time limit for every run.
+- Other algorithms plug in through ``ALGORITHMS``: a function ``(inst, cost, params, seed)``
+  returning an object with ``routes``, ``cost``, ``seconds`` and ``iterations``, and a tuning grid.
+  They are then run on the same instances, objective, seeds and time limit.
+
+Usage:
+    python experiments/solomon_study.py tune   # -> results/solomon_tuning.csv
+    python experiments/solomon_study.py run    # -> results/solomon_benchmark.csv
+"""
+
+from __future__ import annotations
+
+import itertools
+import platform
+import sys
+from multiprocessing import Pool
+from pathlib import Path
+
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from cvrp.instance import Instance  # noqa: E402
+from cvrp.tabu import TabuParams, distance_cost, tabu_search  # noqa: E402
+from cvrp.utils import distance_matrix  # noqa: E402
+
+DATA = ROOT / "data" / "solomon"
+RESULTS = ROOT / "results"
+TIME_LIMIT = 20.0  # seconds per run
+WORKERS = 7  # parallel runs (one core left free)
+TUNING = ["C101", "C201", "R101", "R201", "RC101", "RC201"]
+TUNE_SEEDS = [101, 102]
+TEST_SEEDS = list(range(1, 11))  # 10 seeds per (instance, algorithm)
+
+
+def load(name: str) -> Instance:
+    """Read a Solomon instance and its best known cost.
+
+    The best known costs of this dataset use distances truncated to one decimal (checked on all
+    56 files), so the instance uses the same distances; with exact distances every gap would be
+    about 0.3 % too high.
+    """
+    inst = Instance.from_vrplib(
+        DATA / f"{name}.txt", DATA / f"{name}.sol", instance_format="solomon"
+    )
+    inst.dist = distance_matrix(inst.coords, rounding="floor1")
+    return inst
+
+
+def _tabu(inst: Instance, cost, params: dict, seed: int):
+    return tabu_search(inst, cost, TabuParams(time_limit=TIME_LIMIT, **params), seed)
+
+
+# name -> (solver, tuning grid)
+ALGORITHMS = {
+    "tabu": (_tabu, {"tenure": [5, 10, 20], "candidates": [50, 200, 500]}),
+}
+
+
+def run_one(job: tuple[str, str, dict, int]) -> dict:
+    """Run one (instance, algorithm, parameters, seed) and return one CSV row."""
+    name, algo, params, seed = job
+    inst = load(name)
+    cost = distance_cost(inst)
+    res = ALGORITHMS[algo][0](inst, cost, params, seed)
+    served = sorted(c for r in res.routes for c in r) == list(range(1, inst.n_customers + 1))
+    check = sum(cost(tuple(r)) for r in res.routes)
+    return {
+        "instance": name,
+        "family": name.rstrip("0123456789"),
+        "n": inst.n_customers,
+        "time_windows": True,
+        "algorithm": algo,
+        "params": str(params),
+        "seed": seed,
+        "cost": round(res.cost, 2),
+        "best_known": inst.best_known,
+        "gap": round(100 * (res.cost - inst.best_known) / inst.best_known, 3),
+        "seconds": round(res.seconds, 2),
+        "iterations": res.iterations,
+        "routes": len(res.routes),
+        "feasible": served and abs(check - res.cost) < 1e-6,
+    }
+
+
+def grid(d: dict) -> list[dict]:
+    """Every combination of the parameter values."""
+    return [dict(zip(d, v, strict=True)) for v in itertools.product(*d.values())]
+
+
+def run(jobs: list, out: Path) -> pd.DataFrame:
+    """Run the jobs in parallel, saving the CSV every 25 runs."""
+    RESULTS.mkdir(exist_ok=True)
+    cpu = platform.processor()
+    print(f"{len(jobs)} runs x {TIME_LIMIT:.0f} s on {WORKERS} workers, {cpu}", flush=True)
+    rows = []
+    with Pool(WORKERS) as pool:
+        for i, row in enumerate(pool.imap_unordered(run_one, jobs), 1):
+            rows.append(row)
+            if i % 25 == 0 or i == len(jobs):
+                pd.DataFrame(rows).to_csv(out, index=False)
+                print(f"{i}/{len(jobs)}", flush=True)
+    return pd.DataFrame(rows)
+
+
+def best_params(tuning: pd.DataFrame, algo: str) -> dict:
+    """Parameters with the lowest mean gap on the tuning set."""
+    t = tuning[tuning.algorithm == algo].groupby("params").gap.mean()
+    print(f"{algo} tuning (mean gap %):\n{t.sort_values().round(2).to_string()}")
+    return eval(t.idxmin())  # noqa: S307  (our own str(dict))
+
+
+if __name__ == "__main__":
+    phase = sys.argv[1] if len(sys.argv) > 1 else "run"
+    if phase == "tune":
+        jobs = [
+            (n, a, p, s)
+            for a, (_, g) in ALGORITHMS.items()
+            for n in TUNING
+            for p in grid(g)
+            for s in TUNE_SEEDS
+        ]
+        run(jobs, RESULTS / "solomon_tuning.csv")
+    else:
+        tuning = pd.read_csv(RESULTS / "solomon_tuning.csv")
+        chosen = {a: best_params(tuning, a) for a in ALGORITHMS}
+        test = sorted(p.stem for p in DATA.glob("*.txt") if p.stem not in TUNING)
+        jobs = [(n, a, p, s) for n in test for a, p in chosen.items() for s in TEST_SEEDS]
+        run(jobs, RESULTS / "solomon_benchmark.csv")

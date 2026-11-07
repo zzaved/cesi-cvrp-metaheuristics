@@ -21,11 +21,12 @@ dependencies = [
   "scipy>=1.11",
   "vrplib>=1.4",
   "pulp>=2.8",
+  "highspy>=1.7",  # MIP solver used by cvrp.ilp (PuLP 4 found no CBC)
   "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6", "jupyter>=1.0", "nbconvert>=7.0"]
+dev = ["pytest>=8.0", "ruff>=0.6", "jupyter>=1.0", "nbconvert>=7.0", "tabulate>=0.9"]
 fast = ["numba>=0.59"]
 
 [tool.setuptools.packages.find]
