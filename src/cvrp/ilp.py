@@ -1,15 +1,16 @@
 """Exact approach: integer linear programs for small instances (PuLP with HiGHS).
 
-The formulations are written out in docs/technical/ilp-model and compared in
-notebooks/01_modeling_check. Three ways to forbid subtours and enforce capacity
-on the same two-index model are implemented:
+The formulations are written out in docs/technical/ilp-model. They solve the classic
+CVRP and CVRPTW (objective: total distance, no traffic); the time-dependent model of
+notebook 01 (route duration with hourly traffic) is not implemented yet. Three ways to
+forbid subtours and enforce capacity on the same two-index model are implemented:
 
 - ``solve_cvrp_mtz``: Miller-Tucker-Zemlin load variables (compact, weak LP).
 - ``solve_cvrp_flow``: single-commodity flow, Gavish and Graves (compact, stronger LP).
 - ``solve_cvrp_rcc``: rounded capacity cuts added lazily (exponential family, strongest LP).
 
 ``solve_cvrptw`` adds time variables and big-M linking constraints to the flow
-model (the formulation chosen in notebook 01) for the Level A problem.
+model for the Level A problem.
 """
 
 from __future__ import annotations

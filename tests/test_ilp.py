@@ -3,7 +3,7 @@ import pytest
 from cvrp import Instance
 from cvrp.ilp import solve_cvrp_flow, solve_cvrp_mtz, solve_cvrp_rcc, solve_cvrptw
 
-# Optimum of the tiny instance, checked by brute force in notebook 01: 4 + 4 + 2 + sqrt(2).
+# Optimum of the tiny instance, found by hand: 4 + 4 + 2 + sqrt(2).
 TINY_OPTIMUM = 10 + 2**0.5
 FORMULATIONS = [solve_cvrp_mtz, solve_cvrp_flow, solve_cvrp_rcc]
 

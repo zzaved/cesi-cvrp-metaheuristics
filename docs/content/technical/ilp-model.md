@@ -5,7 +5,8 @@ title: ILP model
 
 # Integer linear programming model
 
-Owner: **Person 1**. Feeds section 6 of notebook 01 and section 3 and 4 of the final deliverable.
+Owner: **Person 1**. Feeds sections 3 and 4 of the final deliverable. The model of notebook 01 (route duration
+with hourly traffic) is not yet in `ilp.py`, which solves the distance objective without traffic.
 Code: `src/cvrp/ilp.py`. Notation: [Modeling](./modeling.md).
 
 ## Two-index formulation with MTZ constraints (CVRP)
@@ -86,7 +87,7 @@ so MTZ (5) is no longer strictly needed, but keeping it helps the solver.
 | Lower bound | LP relaxation, or best bound when the time limit stops the solver | how far any solution can be from optimal |
 | Upper bound | best integer found by the ILP, or the metaheuristic | what we can actually deliver |
 
-## Formulation choice (tested in notebook 01)
+## Formulation choice (tested in a first version of notebook 01)
 
 Three ways to forbid subtours and enforce capacity on the same two-index core were compared on 18
 instances (A and B cut to n = 6 to 16, six complete P instances), HiGHS, one thread, 60 s:
@@ -106,6 +107,6 @@ Solomon C101 is solved to its optimum 828.94 (exact distances). Code: `solve_cvr
 ## TODO (Person 1)
 
 - [x] Implement `solve_cvrp_mtz` and test it on the tiny instance (known optimum).
-- [ ] Table: n against solve time and gap between bounds, n = 5 to 20 (first version in notebook 01, section 9).
+- [ ] Table: n against solve time and gap between bounds, n = 5 to 20.
 - [x] Implement `solve_cvrptw`; test on a truncated Solomon instance (first 10 to 15 customers).
 - [x] Decide PuLP with CBC or OR-Tools: PuLP with HiGHS (`highspy`), since PuLP 4 found no CBC.
