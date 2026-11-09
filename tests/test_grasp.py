@@ -92,3 +92,45 @@ def test_solomon_c101_reaches_reference():
     res = grasp(inst, GRASPParams(iterations=10), seed=1)
     assert res.best.is_feasible(inst)
     assert res.cost <= 827.3 * 1.01
+
+
+# ---------------------------------------------------------------- traffic mode
+def _working_day(n: int = 40, seed: int = 3) -> Instance:
+    """Random customers with windows inside a 08:00-18:00 working day (minutes)."""
+    base = Instance.random(n, capacity=100, seed=seed)
+    rng = np.random.default_rng(seed)
+    ready = np.concatenate([[480.0], rng.uniform(480, 900, n)])
+    due = np.concatenate([[1080.0], ready[1:] + rng.uniform(60, 180, n)])
+    service = np.concatenate([[0.0], np.full(n, 10.0)])
+    return Instance(
+        name=f"day-n{n}",
+        coords=base.coords,
+        demands=base.demands,
+        capacity=100,
+        num_vehicles=12,
+        ready_times=ready,
+        due_times=due,
+        service_times=service,
+    )
+
+
+def test_traffic_cost_is_the_tabu_duration():
+    from cvrp.tabu import duration_cost
+
+    inst = _working_day()
+    res = grasp(inst, GRASPParams(iterations=3, objective="duration"), seed=0)
+    cost = duration_cost(inst, start_min=480.0)
+    assert res.best is not None and res.best.is_feasible(inst)
+    assert len(res.best.routes) <= inst.num_vehicles
+    assert res.cost == pytest.approx(sum(cost(tuple(r)) for r in res.best.routes))
+
+
+def test_traffic_mode_is_reproducible():
+    inst = _working_day()
+    p = GRASPParams(iterations=2, objective="duration")
+    assert grasp(inst, p, seed=5).cost == grasp(inst, p, seed=5).cost
+
+
+def test_unknown_objective_is_rejected():
+    with pytest.raises(ValueError):
+        grasp(Instance.random(10, seed=0), GRASPParams(objective="speed"))
