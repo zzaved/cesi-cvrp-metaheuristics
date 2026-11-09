@@ -43,9 +43,10 @@ src/cvrp/          the solver package
   construct.py       nearest neighbor, Clarke and Wright, sweep
   neighborhoods.py   2-opt, relocate, swap, Or-opt, cross-exchange
   alns.py            ALNS: destroy, repair, adaptive weights, SA acceptance
-  sa.py              simulated annealing helpers and baseline
+  sa.py              SAParams, SAResult and sa(); shared SA acceptance helpers
   sa_vrptw.py        SA problem model, evaluator, construction and matched Solomon experiments
   sa_static.py       Numba-compiled SA moves and wall-clock temperature schedule
+  sa_protocol.py     SA-only tuning/test workflow and result validation
   ilp.py             exact models (PuLP) for small instances
   timewindows.py     schedules, waiting, window feasibility
   utils.py, viz.py   distance matrix, timing, gap; plots
@@ -89,12 +90,27 @@ Documentation site locally: `make docs` (Node 20+).
 
 The generic benchmark's seeds, time limits and parameters live in `config.yaml`.
 
-`notebooks/SA.ipynb` runs SA on all 56 supplied Solomon instances, with ten seeds
-and 20 seconds per run (560 SA runs). It reads `.txt`/`.sol` pairs from
-`data/solomon/`, uses truncated distances, and displays per-instance means, sample
-standard deviations and per-run iteration counts without exporting CSV files.
-SA's temperatures are documented heuristic defaults, not formally tuned values.
-See the notebook and [data notes](data/README.md) for the protocol.
+`notebooks/SA.ipynb` follows the repository's parameter/result structure and SA protocol: all
+56 supplied instances are divided into six tuning cases and 50 test cases.
+Twelve SA temperature settings use tuning seeds 101-102 (144 runs); the selected
+setting uses test seeds 1-10 (500 runs), always with a 20-second nominal budget.
+The notebook reads `.txt`/`.sol` pairs, uses truncated distances, and reports
+sample standard deviations, runtime and move counts without exporting CSV files.
+The notebook reports SA only, without loading other algorithms or older mixed-protocol
+result tables. No additional notebook is created.
+
+The public SA interface uses the shared data/result contract:
+
+```python
+from cvrp.sa import SAParams, sa
+
+res = sa(inst, SAParams(time_limit=20.0), seed=1)
+print(res.cost, res.runtime, res.iterations, res.best.is_feasible(inst))
+```
+
+`SAParams` defaults remain heuristic; only the matched tuning campaign selects
+parameters for the test campaign. Quick checks are not benchmark results. See
+the notebook and [data notes](data/README.md) for the benchmark limitations.
 
 ## Roadmap
 

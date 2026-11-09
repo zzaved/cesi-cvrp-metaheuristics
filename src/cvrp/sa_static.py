@@ -171,6 +171,7 @@ def anneal_static(
     time_limit=20.0,
     initial_temperature_factor=0.005,
     final_temperature=0.02,
+    max_iterations=None,
 ):
     """Run SA with cooling tied to elapsed time, including initialization."""
     if not math.isfinite(time_limit) or time_limit <= 0:
@@ -179,6 +180,10 @@ def anneal_static(
         raise ValueError("initial_temperature_factor must be finite and positive")
     if not math.isfinite(final_temperature) or final_temperature <= 0:
         raise ValueError("final_temperature must be finite and positive")
+    if max_iterations is not None and (
+        not isinstance(max_iterations, (int, np.integer)) or max_iterations <= 0
+    ):
+        raise ValueError("max_iterations must be a positive integer or None")
     started = time.perf_counter()
     deadline = started + time_limit
     rng = np.random.default_rng(seed)
@@ -196,9 +201,13 @@ def anneal_static(
     best, best_lengths = routes.copy(), lengths.copy()
     best_energy = costs.sum() + weight * np.count_nonzero(lengths)
     initial_temperature = max(1.0, initial_metrics["distance"] * initial_temperature_factor)
-    history = [(0.0, initial_metrics["distance"], len(initial_routes))]
+    history = [(time.perf_counter() - started, initial_metrics["distance"], len(initial_routes))]
+    history_iterations = [0]
     iterations = accepted = 0
     while time.perf_counter() < deadline:
+        if max_iterations is not None and iterations >= max_iterations:
+            break
+        steps = 256 if max_iterations is None else min(256, max_iterations - iterations)
         progress = min(1.0, (time.perf_counter() - started) / time_limit)
         temperature = initial_temperature * (final_temperature / initial_temperature) ** progress
         old_best = best_energy
@@ -216,16 +225,17 @@ def anneal_static(
             p.capacity,
             weight,
             temperature,
-            256,
+            steps,
             seed if iterations == 0 else -1,
         )
-        iterations += 256
+        iterations += steps
         accepted += count
         if best_energy < old_best - 1e-8:
             vehicles = int(np.count_nonzero(best_lengths))
             history.append(
                 (time.perf_counter() - started, best_energy - weight * vehicles, vehicles)
             )
+            history_iterations.append(iterations)
     search_elapsed = time.perf_counter() - started
     result_routes = [best[i, :length].tolist() for i, length in enumerate(best_lengths) if length]
     metrics = validate(p, result_routes)
@@ -237,8 +247,14 @@ def anneal_static(
         elapsed=time.perf_counter() - started,
         search_elapsed=search_elapsed,
         time_limit=time_limit,
-        stop_reason="time_limit",
+        stop_reason=(
+            "iterations"
+            if max_iterations is not None and iterations >= max_iterations
+            else "time_limit"
+        ),
         iterations=iterations,
         accepted=accepted,
         history=history,
+        history_iterations=history_iterations,
+        initial_routes=[list(r) for r in initial_routes],
     )
