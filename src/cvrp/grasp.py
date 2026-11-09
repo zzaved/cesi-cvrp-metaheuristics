@@ -65,6 +65,7 @@ import numpy as np
 
 from cvrp.instance import Instance
 from cvrp.solution import Solution
+from cvrp.tabu import cached, duration_cost
 
 EPS = 1e-7
 INF = float("inf")
@@ -89,7 +90,12 @@ class GRASPParams:
             (Solomon I1 idea); 0 means pure distance.
         perturb_kicks: Kick-and-descend rounds after each descent (0 = plain GRASP).
         time_limit: Optional wall-clock limit in seconds, checked between
-            iterations and between kicks (the current descent always finishes).
+            iterations and between kicks (the current descent always finishes;
+            in traffic mode it is also checked inside the descent).
+        objective: ``"distance"`` (total distance, travel time = distance, used
+            for the Solomon benchmark) or ``"duration"`` (total route duration
+            with hourly traffic, the team model of notebook 01).
+        start_min: Depot departure in minutes after midnight (traffic mode only).
     """
 
     alpha: float = 0.1
@@ -102,6 +108,8 @@ class GRASPParams:
     tw_weight: float = 0.0
     perturb_kicks: int = 0
     time_limit: float | None = None
+    objective: str = "distance"
+    start_min: float = 480.0
 
 
 @dataclass
@@ -110,7 +118,8 @@ class GRASPResult:
 
     Attributes:
         best: Best feasible solution found (``None`` if none was feasible).
-        cost: Its total distance (``inf`` if none).
+        cost: Its total distance, or its total duration in minutes in traffic
+            mode (``inf`` if none).
         runtime: Wall-clock seconds.
         iterations: Iterations actually performed.
         history: One dict per iteration: constructed cost, cost after local
@@ -746,6 +755,10 @@ def grasp(
         ``Solution.violations`` evaluator, not with the internal caches.
     """
     p = params or GRASPParams()
+    if p.objective == "duration":
+        return _grasp_traffic(inst, p, seed, verbose)
+    if p.objective != "distance":
+        raise ValueError(f"unknown objective {p.objective!r}")
     rng = random.Random(seed)
     m = _Model(inst, p.n_neighbors)
     t0 = time.perf_counter()
@@ -784,5 +797,312 @@ def grasp(
         if verbose:
             print(f"it {it:3d}  construct {c_constr:9.1f}  LS {cost:9.1f}  best {best_cost:9.1f}")
         if p.time_limit is not None and time.perf_counter() - t0 > p.time_limit:
+            break
+    return GRASPResult(best_sol, best_cost, time.perf_counter() - t0, it, history)
+
+
+# --------------------------------------------------------------------------- #
+# Traffic mode: exact route evaluation with time-dependent travel times        #
+# --------------------------------------------------------------------------- #
+Routes = list[list[int]]
+
+
+class _TimeLimitError(Exception):
+    """Raised inside the traffic descent when the time limit is reached."""
+
+
+def _insertion_traffic(cost, route: list[int], u: int) -> tuple[float, int]:
+    """Cheapest feasible position of ``u`` in ``route`` under ``cost``: (delta, position)."""
+    base = cost(tuple(route))
+    best, best_k = INF, -1
+    for k in range(len(route) + 1):
+        c = cost((*route[:k], u, *route[k:])) - base
+        if c < best:
+            best, best_k = c, k
+    return best, best_k
+
+
+def _construct_traffic(m: _Model, cost, rng: random.Random, alpha: float, mode: str) -> Routes:
+    """Randomized parallel insertion with an RCL, every insertion evaluated exactly."""
+    routes: Routes = []
+    unrouted = set(range(1, m.n + 1))
+    cand: dict[int, list[tuple[float, int]]] = {u: [] for u in unrouted}
+
+    def open_route() -> None:
+        pool = sorted(unrouted, key=lambda c: (-m.D[0][c], m.l[c]))
+        if m.tw and rng.random() < 0.5:
+            pool = sorted(unrouted, key=lambda c: m.l[c])
+        pool = [c for c in pool if math.isfinite(cost((c,)))]
+        if not pool:
+            raise ValueError("a customer cannot be served alone under traffic: infeasible")
+        top = pool[: max(1, int(math.ceil(alpha * len(pool) * 0.2)) + 1)]
+        u = rng.choice(top)
+        routes.append([u])
+        unrouted.discard(u)
+        cand.pop(u, None)
+        for v in unrouted:
+            cand[v].append(_insertion_traffic(cost, routes[-1], v))
+
+    open_route()
+    while unrouted:
+        scores: list[tuple[float, int]] = []
+        for u in unrouted:
+            b1 = b2 = INF
+            for sc, _ in cand[u]:
+                if sc < b1:
+                    b1, b2 = sc, b1
+                elif sc < b2:
+                    b2 = sc
+            if b1 == INF:
+                continue
+            if mode == "regret":
+                reg = (b2 - b1) if b2 < INF else 2.0 * m.D[0][u]
+                scores.append((b1 - reg, u))
+            else:
+                scores.append((b1, u))
+        if not scores:
+            open_route()
+            continue
+        lo = min(sc for sc, _ in scores)
+        hi = max(sc for sc, _ in scores)
+        thr = lo + alpha * (hi - lo) + EPS
+        u = rng.choice([u for sc, u in scores if sc <= thr])
+        opts = cand.pop(u)
+        ri = min(range(len(opts)), key=lambda i: opts[i][0])
+        routes[ri].insert(opts[ri][1], u)
+        unrouted.discard(u)
+        for v in unrouted:  # adaptive: only the modified route is re-evaluated
+            cand[v][ri] = _insertion_traffic(cost, routes[ri], v)
+    return routes
+
+
+class _LocalSearchTraffic:
+    """Granular VND with exact (memoized) route costs: moves change one or two routes."""
+
+    def __init__(self, m: _Model, routes: Routes, cost, rng, p: GRASPParams, deadline) -> None:
+        self.m, self.cost, self.rng, self.p, self.deadline = m, cost, rng, p, deadline
+        self.routes = [r for r in routes if r]
+        self.reindex()
+        self.ops = [self._relocate, self._swap, self._two_opt_star, self._or_opt, self._two_opt]
+
+    def reindex(self) -> None:
+        """Rebuild ``where[u] = (route index, position)``."""
+        self.where = [(-1, -1)] * (self.m.n + 1)
+        for ri, r in enumerate(self.routes):
+            for k, u in enumerate(r):
+                self.where[u] = (ri, k)
+
+    def c(self, r) -> float:
+        """Exact cost of one route."""
+        return self.cost(tuple(r))
+
+    def run(self) -> None:
+        """Descend until no neighborhood improves (or the time limit is reached)."""
+        k, moves = 0, 0
+        first = self.p.improvement == "first"
+        order = list(range(1, self.m.n + 1))
+        while k < len(self.ops) and moves < self.p.max_local_rounds:
+            if self.deadline is not None and time.perf_counter() > self.deadline:
+                raise _TimeLimitError
+            op = self.ops[k]
+            self.rng.shuffle(order)
+            best = None
+            for u in order:
+                for mv in op(u):
+                    if best is None or mv[0] < best[0]:
+                        best = mv
+                    if first:
+                        break
+                if first and best is not None:
+                    break
+            if best is not None:
+                self._apply(best[1])
+                moves += 1
+                k = 0
+            else:
+                k += 1
+
+    def _apply(self, changes: dict[int, list[int]]) -> None:
+        for ri, r in changes.items():
+            self.routes[ri] = r
+        self.routes = [r for r in self.routes if r]
+        self.reindex()
+
+    def _pair(self, ru, nu, rv, nv):
+        """Delta of replacing routes ru, rv by nu, nv (None if not improving)."""
+        R, T = self.routes[ru], self.routes[rv]
+        delta = self.c(nu) + self.c(nv) - self.c(R) - self.c(T)
+        return (delta, {ru: nu, rv: nv}) if delta < -EPS else None
+
+    def _single(self, ru, nu):
+        delta = self.c(nu) - self.c(self.routes[ru])
+        return (delta, {ru: nu}) if delta < -EPS else None
+
+    def _relocate(self, u):
+        ru, pu = self.where[u]
+        R = self.routes[ru]
+        rest = R[:pu] + R[pu + 1 :]
+        for v in self.m.neigh[u]:
+            rv, pv = self.where[v]
+            for k in (pv, pv + 1):  # before or after v
+                if rv == ru:
+                    kk = k if k <= pu else k - 1
+                    mv = self._single(ru, rest[:kk] + [u] + rest[kk:])
+                else:
+                    T = self.routes[rv]
+                    mv = self._pair(ru, rest, rv, T[:k] + [u] + T[k:])
+                if mv:
+                    yield mv
+
+    def _swap(self, u):
+        ru, pu = self.where[u]
+        for v in self.m.neigh[u]:
+            rv, pv = self.where[v]
+            if rv == ru:
+                continue
+            R, T = self.routes[ru], self.routes[rv]
+            mv = self._pair(ru, R[:pu] + [v] + R[pu + 1 :], rv, T[:pv] + [u] + T[pv + 1 :])
+            if mv:
+                yield mv
+
+    def _two_opt_star(self, u):
+        ru, i = self.where[u]
+        for v in self.m.neigh[u]:
+            rv, j = self.where[v]
+            if rv == ru:
+                continue
+            R, T = self.routes[ru], self.routes[rv]
+            mv = self._pair(ru, R[: i + 1] + T[j:], rv, T[:j] + R[i + 1 :])
+            if mv:
+                yield mv
+
+    def _or_opt(self, u):
+        ru, pu = self.where[u]
+        R = self.routes[ru]
+        for ln in (2, 3):
+            if pu + ln > len(R):
+                break
+            seg, rest = R[pu : pu + ln], R[:pu] + R[pu + ln :]
+            for v in self.m.neigh[seg[-1]]:
+                rv, pv = self.where[v]
+                if rv == ru:
+                    continue
+                T = self.routes[rv]
+                mv = self._pair(ru, rest, rv, T[:pv] + seg + T[pv:])
+                if mv:
+                    yield mv
+
+    def _two_opt(self, u):
+        ru, i = self.where[u]
+        R = self.routes[ru]
+        for j in range(i + 2, len(R)):
+            mv = self._single(ru, R[: i + 1] + R[i + 1 : j + 1][::-1] + R[j + 1 :])
+            if mv:
+                yield mv
+
+
+def _reinsert_traffic(m: _Model, cost, routes: Routes, customers: list[int], rng) -> bool:
+    """Cheapest exact insertion of each customer; a new route if the fleet allows it."""
+    rng.shuffle(customers)
+    customers.sort(key=lambda c: m.l[c] - m.e[c])
+    for u in customers:
+        best, best_ri, best_k = INF, -1, -1
+        for ri, r in enumerate(routes):
+            c, k = _insertion_traffic(cost, r, u)
+            if c < best:
+                best, best_ri, best_k = c, ri, k
+        if best_ri < 0:
+            if len(routes) >= m.K or not math.isfinite(cost((u,))):
+                return False
+            routes.append([u])
+        else:
+            routes[best_ri].insert(best_k, u)
+    return True
+
+
+def _kick_traffic(m: _Model, cost, routes: Routes, rng) -> Routes | None:
+    """Remove a cluster of 10-20 % of the customers and reinsert them (None if it fails)."""
+    k = max(3, int(rng.uniform(0.10, 0.20) * m.n))
+    seed = rng.randint(1, m.n)
+    near = [seed, *m.neigh[seed]]
+    if len(near) < k:
+        near += rng.sample(range(1, m.n + 1), k)
+    removed = list(dict.fromkeys(near))[:k]
+    rem = set(removed)
+    new = [[c for c in r if c not in rem] for r in routes]
+    new = [r for r in new if r]
+    return new if _reinsert_traffic(m, cost, new, removed, rng) else None
+
+
+def _eliminate_routes_traffic(m: _Model, cost, routes: Routes, rng) -> Routes:
+    """Try to empty the smallest routes while the fleet limit is exceeded."""
+    tries = 0
+    while len(routes) > m.K and tries < 3 * len(routes):
+        tries += 1
+        ri = min(range(len(routes)), key=lambda i: len(routes[i]))
+        trial = [list(r) for i, r in enumerate(routes) if i != ri]
+        if not _reinsert_traffic(m, cost, trial, list(routes[ri]), rng):
+            break
+        routes = trial
+    return routes
+
+
+def _grasp_traffic(inst: Instance, p: GRASPParams, seed, verbose: bool) -> GRASPResult:
+    """GRASP minimizing the total route duration with the hourly traffic of notebook 01."""
+    rng = random.Random(seed)
+    m = _Model(inst, p.n_neighbors)
+    cost = cached(duration_cost(inst, start_min=p.start_min))
+    t0 = time.perf_counter()
+    deadline = None if p.time_limit is None else t0 + p.time_limit
+    best_sol, best_cost = None, INF
+    history: list[dict] = []
+    it = 0
+
+    def total(rs: Routes) -> float:
+        return sum(cost(tuple(r)) for r in rs)
+
+    for it in range(1, p.iterations + 1):
+        routes = _construct_traffic(m, cost, rng, p.alpha, p.construction)
+        c_constr = total(routes)
+        if len(routes) > m.K:
+            routes = _eliminate_routes_traffic(m, cost, routes, rng)
+        ls = _LocalSearchTraffic(m, routes, cost, rng, p, deadline)
+        try:
+            ls.run()
+            for _ in range(p.perturb_kicks):
+                if deadline is not None and time.perf_counter() > deadline:
+                    break
+                cand = _kick_traffic(m, cost, ls.routes, rng)
+                if cand is None:
+                    continue
+                trial = _LocalSearchTraffic(m, cand, cost, rng, p, deadline)
+                trial.run()
+                if len(trial.routes) <= m.K and total(trial.routes) < total(ls.routes) - EPS:
+                    ls = trial
+        except _TimeLimitError:
+            pass  # keep the routes reached so far: every applied move kept them feasible
+        routes = ls.routes
+        dur = total(routes)
+        sol = Solution([list(r) for r in routes])
+        # Exact traffic feasibility (finite duration, fleet) plus the shared evaluator:
+        # travel under traffic is never faster than distance, so it must accept the routes too.
+        feasible = math.isfinite(dur) and len(routes) <= m.K and sol.is_feasible(inst)
+        if feasible and dur < best_cost - EPS:
+            best_sol, best_cost = sol, dur
+        history.append(
+            {
+                "iteration": it,
+                "constructed": c_constr,
+                "after_ls": dur,
+                "best": best_cost,
+                "distance": sol.cost(inst),
+                "routes": len(routes),
+                "feasible": feasible,
+                "seconds": time.perf_counter() - t0,
+            }
+        )
+        if verbose:
+            print(f"it {it:3d}  construct {c_constr:9.1f}  LS {dur:9.1f}  best {best_cost:9.1f}")
+        if deadline is not None and time.perf_counter() > deadline:
             break
     return GRASPResult(best_sol, best_cost, time.perf_counter() - t0, it, history)
