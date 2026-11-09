@@ -5,9 +5,10 @@ title: ILP model
 
 # Integer linear programming model
 
-Owner: **Person 1**. Feeds sections 3 and 4 of the final deliverable. The model of notebook 01 (route duration
-with hourly traffic) is not yet in `ilp.py`, which solves the distance objective without traffic.
-Code: `src/cvrp/ilp.py`. Notation: [Modeling](./modeling.md).
+Owner: **Person 1**. Feeds sections 3 and 4 of the final deliverable. The model of notebook 01 (route
+duration with hourly traffic) is `solve_tdvrptw`; the formulations below are its special cases
+without traffic, with total distance as objective, the ones the published best known values refer
+to. Code: `src/cvrp/ilp.py`. Notation: [Modeling](./modeling.md).
 
 ## Two-index formulation with MTZ constraints (CVRP)
 
@@ -104,9 +105,18 @@ constraints (7) to (9). All optima match the published values on the P instances
 Solomon C101 is solved to its optimum 828.94 (exact distances). Code: `solve_cvrp_mtz`,
 `solve_cvrp_flow`, `solve_cvrp_rcc`, `solve_cvrptw` in `src/cvrp/ilp.py`.
 
+## Model of notebook 01: route duration with hourly traffic
+
+`solve_tdvrptw(inst, rho)` writes constraints (1) to (11) of notebook 01 as they stand: three-index
+$x_{ij}^k$, departure hour $y_{ih}$ and $y_{0h}^k$, times $a_i, w_i, t_i, t_0^k, t_{n+1}^k$,
+$M = 2880$, objective $\sum_k (t_{n+1}^k - t_0^k)$. On the toy instance of notebook 01 it proves
+the optimum 247.16 min, the same value as an enumeration of every partition, order and departure
+time (`tests/test_ilp.py`).
+
 ## TODO (Person 1)
 
 - [x] Implement `solve_cvrp_mtz` and test it on the tiny instance (known optimum).
-- [ ] Table: n against solve time and gap between bounds, n = 5 to 20.
+- [x] Table: n against solve time and gap between bounds (`experiments/exact_study.py`, final notebook section 4).
+- [x] Implement the model of notebook 01 (`solve_tdvrptw`).
 - [x] Implement `solve_cvrptw`; test on a truncated Solomon instance (first 10 to 15 customers).
 - [x] Decide PuLP with CBC or OR-Tools: PuLP with HiGHS (`highspy`), since PuLP 4 found no CBC.

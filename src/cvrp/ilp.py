@@ -1,9 +1,10 @@
 """Exact approach: integer linear programs for small instances (PuLP with HiGHS).
 
-The formulations are written out in docs/technical/ilp-model. They solve the classic
-CVRP and CVRPTW (objective: total distance, no traffic); the time-dependent model of
-notebook 01 (route duration with hourly traffic) is not implemented yet. Three ways to
-forbid subtours and enforce capacity on the same two-index model are implemented:
+The formulations are written out in docs/technical/ilp-model. ``solve_tdvrptw`` is the model of
+notebook 01 as written there: total route duration with hourly traffic, one variable set per
+truck. The other solvers are its classic special cases (no traffic, rho_h = 1, objective total
+distance), the ones the Solomon best known values refer to. Three ways to forbid subtours and
+enforce capacity on the same two-index model are implemented:
 
 - ``solve_cvrp_mtz``: Miller-Tucker-Zemlin load variables (compact, weak LP).
 - ``solve_cvrp_flow``: single-commodity flow, Gavish and Graves (compact, stronger LP).
@@ -11,6 +12,9 @@ forbid subtours and enforce capacity on the same two-index model are implemented
 
 ``solve_cvrptw`` adds time variables and big-M linking constraints to the flow
 model for the Level A problem.
+
+Constraint numbers in the comments of the two-index models follow docs/technical/ilp-model;
+those of ``solve_tdvrptw`` follow notebook 01.
 """
 
 from __future__ import annotations
@@ -410,3 +414,106 @@ def solve_cvrptw(inst: Instance, time_limit: float = 60.0, relax: bool = False) 
         prob += t[i] + s[i] + c[i][0] <= due[0] + big_m * (1 - x[i, 0]), f"back_{i}"
     status, obj, bound = _solve(prob, time_limit)
     return _result(prob, x, inst, status, obj, bound, start, relax=relax)
+
+
+def solve_tdvrptw(
+    inst: Instance,
+    rho: tuple[float, ...],
+    time_limit: float = 60.0,
+    big_m: float = 2880.0,
+    relax: bool = False,
+) -> ILPResult:
+    """Solve the model of notebook 01: route duration with hourly traffic, constraints (1) to (11).
+
+    Times are minutes after midnight; ``inst.dist`` is the empty-road travel time c_ij and
+    ``rho[h]`` the traffic intensity of hour h, so a trip leaving i during hour h takes
+    rho_h c_ij. The depot is split into node 0 (departure) and node n + 1 (return); the
+    trip 0 -> n + 1 is an unused truck. ``inst.ready_times[0]`` and ``inst.due_times[0]``
+    are the working day [e_0, l_0]. The objective is sum_k (t_{n+1}^k - t_0^k).
+    """
+    if not inst.has_time_windows:
+        raise ValueError("solve_tdvrptw needs an instance with time windows")
+    start = time.perf_counter()
+    n, ret = inst.n_customers, inst.n_customers + 1
+    trucks = range(_fleet(inst))
+    hours = range(len(rho))
+    cust = range(1, n + 1)
+    q, c = inst.demands.tolist(), inst.dist.tolist()
+    e, l_ = inst.ready_times.tolist(), inst.due_times.tolist()
+    s = inst.service_times.tolist() if inst.service_times is not None else [0.0] * (n + 1)
+    s[0] = 0.0
+    cat = pulp.LpContinuous if relax else pulp.LpBinary
+    prob = pulp.LpProblem(inst.name.replace("-", "_") + "_td", pulp.LpMinimize)
+
+    # A: depot to customer, customer to customer, customer to depot, and 0 -> n + 1.
+    arcs = [(0, j) for j in cust] + [(i, j) for i in cust for j in cust if i != j]
+    arcs += [(i, ret) for i in cust] + [(0, ret)]
+    x = {
+        (i, j, k): prob.add_variable(f"x_{i}_{j}_{k}", 0, 1, cat) for i, j in arcs for k in trucks
+    }
+    # y_ih (customer) and y_0h^k (depot): hour of departure.
+    y = {(i, h): prob.add_variable(f"y_{i}_{h}", 0, 1, cat) for i in cust for h in hours}
+    y0 = {(h, k): prob.add_variable(f"y0_{h}_{k}", 0, 1, cat) for h in hours for k in trucks}
+    t = {i: prob.add_variable(f"t_{i}", e[i], l_[i]) for i in cust}  # (10) windows as bounds
+    a = {i: prob.add_variable(f"a_{i}", 0) for i in cust}
+    w = {i: prob.add_variable(f"w_{i}", 0) for i in cust}
+    t0 = {k: prob.add_variable(f"t0_{k}", e[0], l_[0]) for k in trucks}  # (10) working day
+    tr = {k: prob.add_variable(f"tr_{k}", e[0], l_[0]) for k in trucks}
+
+    prob += pulp.lpSum(tr[k] - t0[k] for k in trucks)  # total route duration
+    out = {i: [j for a_, j in arcs if a_ == i] for i in range(ret)}
+    inn = {j: [i for i, b in arcs if b == j] for j in range(1, ret + 1)}
+    for i in cust:  # (1) each customer served once, by one truck
+        prob += pulp.lpSum(x[i, j, k] for j in out[i] for k in trucks) == 1, f"serve_{i}"
+    for k in trucks:
+        prob += pulp.lpSum(x[0, j, k] for j in out[0]) == 1, f"leave_{k}"  # (2)
+        prob += pulp.lpSum(x[i, ret, k] for i in inn[ret]) == 1, f"back_{k}"  # (4)
+        for j in cust:  # (3) a truck that enters a customer leaves it
+            prob += (
+                pulp.lpSum(x[i, j, k] for i in inn[j]) == pulp.lpSum(x[j, m, k] for m in out[j]),
+                f"cons_{j}_{k}",
+            )
+        load = pulp.lpSum(q[i] * x[i, j, k] for i in cust for j in out[i])
+        prob += load <= inst.capacity, f"cap_{k}"  # (5)
+    for i in cust:  # (6), (7) one departure hour, and the departure lies in it
+        prob += pulp.lpSum(y[i, h] for h in hours) == 1, f"hour_{i}"
+        prob += pulp.lpSum(60 * h * y[i, h] for h in hours) <= t[i] + s[i], f"hlo_{i}"
+        prob += t[i] + s[i] <= pulp.lpSum(60 * (h + 1) * y[i, h] for h in hours), f"hup_{i}"
+    for k in trucks:
+        prob += pulp.lpSum(y0[h, k] for h in hours) == 1, f"hour0_{k}"
+        prob += pulp.lpSum(60 * h * y0[h, k] for h in hours) <= t0[k], f"hlo0_{k}"
+        prob += t0[k] <= pulp.lpSum(60 * (h + 1) * y0[h, k] for h in hours), f"hup0_{k}"
+    for i, j in arcs:  # (8) arrival = departure + travel time of the departure hour
+        for k in trucks:
+            leave = t0[k] if i == 0 else t[i] + s[i]
+            hour = [y0[h, k] for h in hours] if i == 0 else [y[i, h] for h in hours]
+            travel = pulp.lpSum(rho[h] * c[i][0 if j == ret else j] * hour[h] for h in hours)
+            arrive = tr[k] if j == ret else a[j]
+            gap = arrive - leave - travel
+            prob += gap <= big_m * (1 - x[i, j, k]), f"arr_up_{i}_{j}_{k}"
+            prob += gap >= -big_m * (1 - x[i, j, k]), f"arr_lo_{i}_{j}_{k}"
+    for i in cust:  # (9) wait, then serve
+        prob += t[i] == a[i] + w[i], f"wait_{i}"
+
+    status, obj, bound = _solve(prob, time_limit)
+    solution = None
+    if obj is not None and not relax:
+        routes = []
+        for k in trucks:
+            route, node = [], 0
+            while node != ret:
+                node = next(j for j in out[node] if (x[node, j, k].value() or 0) > 0.5)
+                if node != ret:
+                    route.append(node)
+            if route:
+                routes.append(route)
+        solution = Solution(routes)
+    return ILPResult(
+        status="LP" if relax and obj is not None else status,
+        objective=obj,
+        lower_bound=obj if relax else bound,
+        solution=solution,
+        seconds=time.perf_counter() - start,
+        n_vars=prob.numVariables(),
+        n_constraints=prob.numConstraints(),
+    )
