@@ -348,6 +348,35 @@ def load_solomon(data, name, n=None):
     return problem, routes
 
 
+def problem_from_instance(inst):
+    """Read the shared Instance without recomputing or modifying its distance matrix."""
+    size = inst.n_customers + 1
+    windows = (
+        np.column_stack((inst.ready_times, inst.due_times))
+        if inst.has_time_windows
+        else np.column_stack((np.zeros(size), np.full(size, np.inf)))
+    )
+    service = (
+        np.asarray(inst.service_times, dtype=float).copy()
+        if inst.service_times is not None
+        else np.zeros(size)
+    )
+    if service[0] != 0:
+        raise ValueError("SA expects zero depot service time")
+    return Problem(
+        name=inst.name,
+        xy=np.asarray(inst.coords, dtype=float),
+        q=np.asarray(inst.demands, dtype=float),
+        tw=np.ascontiguousarray(windows, dtype=float),
+        service=service,
+        capacity=float(inst.capacity),
+        max_vehicles=inst.num_vehicles if inst.num_vehicles is not None else inst.n_customers,
+        distance=np.ascontiguousarray(inst.dist, dtype=float),
+        mode="distance",
+        distance_convention="instance_matrix",
+    )
+
+
 def _run_tabu(p, seed, time_limit):
     from cvrp.instance import Instance
     from cvrp.tabu import TabuParams, distance_cost, tabu_search

@@ -89,21 +89,22 @@ def _grasp(inst: Instance, cost, params: dict, seed: int):
 def _sa(inst: Instance, cost, params: dict, seed: int):
     """Simulated Annealing (Dag): compiled engine of src/cvrp/sa_static.py, distance objective.
 
-    Its cooling is tied to elapsed time (T from 0.5 % of the start cost down to 0.02 over the
-    time limit), with fixed heuristic defaults, not empirically tuned SA parameters. The current
-    SA grid is one setting; it does not perform temperature selection.
+    Temperature settings are passed through the adapter for reserved-set tuning.
+    The standalone solver defaults remain 0.005 and 0.02.
     """
     params = dict(params)
     limit = params.pop("time_limit", TIME_LIMIT)
-    out = run_sa(inst, seed=seed, time_limit=limit)
-    routes = out["routes"]
+    out = run_sa(inst, seed=seed, time_limit=limit, **params)
+    if out.best is None:
+        raise RuntimeError(f"SA found no feasible solution on {inst.name}")
+    routes = out.best.routes
     if not Solution(routes=[list(r) for r in routes]).is_feasible(inst):  # shared evaluator
         raise RuntimeError(f"SA returned an infeasible solution on {inst.name}")
     return SimpleNamespace(
         routes=routes,
         cost=sum(cost(tuple(r)) for r in routes),
-        seconds=out["elapsed"],
-        iterations=out["iterations"],
+        seconds=out.runtime,
+        iterations=out.iterations,
     )
 
 
@@ -114,7 +115,13 @@ ALGORITHMS = {
         _grasp,
         {"alpha": [0.1, 0.3, 0.5], "improvement": ["first", "best"], "perturb_kicks": [0, 90]},
     ),
-    "sa": (_sa, {}),
+    "sa": (
+        _sa,
+        {
+            "initial_temperature_factor": [0.0025, 0.005, 0.01],
+            "final_temperature": [0.005, 0.01, 0.02, 0.05],
+        },
+    ),
 }
 
 

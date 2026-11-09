@@ -63,7 +63,7 @@ comes from in `docs/content/experimentation/instances.md`.
 `notebooks/SA.ipynb` reads the supplied standard Solomon `.txt` files and their
 accompanying `.sol` references from `data/solomon/`. The 56 pairs were copied from
 the user's local Solomon collection; they remain git-ignored. Existing `.vrp`
-copies are not used by this notebook. Input hashes are printed in its data cell.
+copies are not used by this notebook. The data cell checks every reference with the shared evaluator.
 
 For this dataset, both travel distance and travel time use Euclidean arcs truncated
 to one decimal. All 56 references were independently checked for coverage,
@@ -71,21 +71,29 @@ capacity, time windows and fleet feasibility, and their recomputed distances mat
 the costs in the supplied `.sol` files. These are distance-oriented references,
 not fleet-first solutions: the supplied R101 reference has 20 routes and cost
 1637.7. This dataset-specific convention takes precedence over the generic exact
-Solomon convention above when reproducing this comparison.
+Solomon convention above when reproducing this benchmark.
 
-The notebook runs SA on all 56 supplied instances, without excluding tuning
-instances or selecting a smaller subset. Seeds 0-9 and a 20-second budget give
-560 SA runs. It displays all per-run iteration counts and per-instance means and
-sample standard deviations. Results remain in memory; no CSV files are exported.
-This is a full-dataset descriptive benchmark, not a held-out evaluation.
+The current SA notebook uses the team split: six tuning instances
+(C101, C201, R101, R201, RC101, RC201) with seeds 101-102, followed by the other
+50 instances with seeds 1-10. Twelve temperature settings give 144 tuning runs;
+the lowest mean tuning gap selects the setting for 500 test runs, all at a
+20-second nominal budget. All 56 supplied cases are used, with separate roles.
+Per-instance means, sample standard deviations, iteration counts and runtime are
+displayed in memory; no CSV files are exported. Prior 56-instance/seed-0-to-9 tables are not used as current test results.
 
-The shared implementation is in `src/cvrp/sa_vrptw.py` and `sa_static.py`;
-`experiments/sa_adapter.py` imports the same construction and validation helpers.
+The public solver is `sa(inst, SAParams(...), seed)` in `src/cvrp/sa.py`, returning
+`SAResult(best, cost, runtime, iterations, history)` with a shared `Solution`.
+The low-level implementation is in `sa_vrptw.py` and `sa_static.py`;
+`experiments/sa_adapter.py` calls the same public solver as the notebook.
 Numba is a main dependency. Compilation is synthetic setup outside the measured
 budget; construction and search are inside it, and reported elapsed time includes
 final validation. SA counts proposed move attempts. The notebook runs SA only; elapsed time
 reflects both the search strategy and its compiled implementation.
 
-SA's initial-temperature factor 0.005 and final temperature 0.02 are fixed
-exploratory heuristic settings, not values selected by a formal six-instance
-temperature-tuning experiment. The notebook explains this limitation explicitly.
+SA's default factor 0.005 and final temperature 0.02 remain exploratory heuristics.
+The matched tuning grid uses factors 0.0025/0.005/0.01 and final temperatures
+0.005/0.01/0.02/0.05; defaults are not labelled as tuned before running selection.
+Earlier development examined test cases, so the matched split does not establish
+blind validation. The notebook performs no algorithm comparisons. It rejects incomplete, quick,
+infeasible or differently seeded SA test records. Proposed-move counts and
+observed runtime provide context for the compiled implementation.
