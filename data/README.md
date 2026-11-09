@@ -57,3 +57,35 @@ comes from in `docs/content/experimentation/instances.md`.
   (`distance_matrix(coords, rounding="floor1")`). Use that convention for every gap, otherwise
   each gap is about 0.3 % too high (C101: 828.94 exact, 827.3 truncated, same routes).
 - Synthetic instances (`Instance.random`) need no download and are generated from a seed.
+
+## SA notebook and supplied Solomon files
+
+`notebooks/SA.ipynb` reads the supplied standard Solomon `.txt` files and their
+accompanying `.sol` references from `data/solomon/`. The 56 pairs were copied from
+the user's local Solomon collection; they remain git-ignored. Existing `.vrp`
+copies are not used by this notebook. Input hashes are printed in its data cell.
+
+For this dataset, both travel distance and travel time use Euclidean arcs truncated
+to one decimal. All 56 references were independently checked for coverage,
+capacity, time windows and fleet feasibility, and their recomputed distances match
+the costs in the supplied `.sol` files. These are distance-oriented references,
+not fleet-first solutions: the supplied R101 reference has 20 routes and cost
+1637.7. This dataset-specific convention takes precedence over the generic exact
+Solomon convention above when reproducing this comparison.
+
+The notebook runs SA on all 56 supplied instances, without excluding tuning
+instances or selecting a smaller subset. Seeds 0-9 and a 20-second budget give
+560 SA runs. It displays all per-run iteration counts and per-instance means and
+sample standard deviations. Results remain in memory; no CSV files are exported.
+This is a full-dataset descriptive benchmark, not a held-out evaluation.
+
+The shared implementation is in `src/cvrp/sa_vrptw.py` and `sa_static.py`;
+`experiments/sa_adapter.py` imports the same construction and validation helpers.
+Numba is a main dependency. Compilation is synthetic setup outside the measured
+budget; construction and search are inside it, and reported elapsed time includes
+final validation. SA counts proposed move attempts. The notebook runs SA only; elapsed time
+reflects both the search strategy and its compiled implementation.
+
+SA's initial-temperature factor 0.005 and final temperature 0.02 are fixed
+exploratory heuristic settings, not values selected by a formal six-instance
+temperature-tuning experiment. The notebook explains this limitation explicitly.

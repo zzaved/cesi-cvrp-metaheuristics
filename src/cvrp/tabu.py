@@ -242,6 +242,7 @@ def tabu_search(
     tenure is drawn in [tenure / 2, 3 tenure / 2] to avoid cycles. Aspiration: a tabu move is
     allowed if it gives a new best solution. Stops at the time limit.
     """
+    t0 = time.perf_counter()
     rng = random.Random(seed)
     cost = cached(cost)
     near = neighbor_lists(inst, params.k_near)
@@ -249,7 +250,6 @@ def tabu_search(
     cur = sum(cost(tuple(r)) for r in routes)
     best, best_cost = [r[:] for r in routes], cur
     tabu_until: dict[int, int] = {}
-    t0 = time.perf_counter()
     history = [(0.0, best_cost)]
     it = 0
     while time.perf_counter() - t0 < params.time_limit:

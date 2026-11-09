@@ -16,6 +16,7 @@ keywords = [
 ]
 dependencies = [
   "numpy>=1.26",
+  "numba>=0.59",
   "pandas>=2.1",
   "matplotlib>=3.8",
   "scipy>=1.11",

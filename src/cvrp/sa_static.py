@@ -161,10 +161,24 @@ def warmup():
     )
 
 
-def anneal_static(p, initialize, validate, *, seed=0, initial=None, time_limit=20.0):
+def anneal_static(
+    p,
+    initialize,
+    validate,
+    *,
+    seed=0,
+    initial=None,
+    time_limit=20.0,
+    initial_temperature_factor=0.005,
+    final_temperature=0.02,
+):
     """Run SA with cooling tied to elapsed time, including initialization."""
     if not math.isfinite(time_limit) or time_limit <= 0:
         raise ValueError("time_limit must be finite and positive")
+    if not math.isfinite(initial_temperature_factor) or initial_temperature_factor <= 0:
+        raise ValueError("initial_temperature_factor must be finite and positive")
+    if not math.isfinite(final_temperature) or final_temperature <= 0:
+        raise ValueError("final_temperature must be finite and positive")
     started = time.perf_counter()
     deadline = started + time_limit
     rng = np.random.default_rng(seed)
@@ -181,8 +195,7 @@ def anneal_static(p, initialize, validate, *, seed=0, initial=None, time_limit=2
     weight = 2 * p.n * float(p.distance.max()) + 1 if p.mode == "benchmark" else 0.0
     best, best_lengths = routes.copy(), lengths.copy()
     best_energy = costs.sum() + weight * np.count_nonzero(lengths)
-    initial_temperature = max(1.0, initial_metrics["distance"] * 0.005)
-    final_temperature = 0.02
+    initial_temperature = max(1.0, initial_metrics["distance"] * initial_temperature_factor)
     history = [(0.0, initial_metrics["distance"], len(initial_routes))]
     iterations = accepted = 0
     while time.perf_counter() < deadline:

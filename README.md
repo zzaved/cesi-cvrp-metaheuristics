@@ -44,6 +44,8 @@ src/cvrp/          the solver package
   neighborhoods.py   2-opt, relocate, swap, Or-opt, cross-exchange
   alns.py            ALNS: destroy, repair, adaptive weights, SA acceptance
   sa.py              simulated annealing helpers and baseline
+  sa_vrptw.py        SA problem model, evaluator, construction and matched Solomon experiments
+  sa_static.py       Numba-compiled SA moves and wall-clock temperature schedule
   ilp.py             exact models (PuLP) for small instances
   timewindows.py     schedules, waiting, window feasibility
   utils.py, viz.py   distance matrix, timing, gap; plots
@@ -85,7 +87,14 @@ Documentation site locally: `make docs` (Node 20+).
 3. `make analyze` writes `results/summary.csv`, `results/summary_tests.csv` and the figures.
 4. `notebooks/03_experimental_study.ipynb` turns them into the study.
 
-Seeds, time limits and parameters all live in `config.yaml`; nothing is set by hand.
+The generic benchmark's seeds, time limits and parameters live in `config.yaml`.
+
+`notebooks/SA.ipynb` runs SA on all 56 supplied Solomon instances, with ten seeds
+and 20 seconds per run (560 SA runs). It reads `.txt`/`.sol` pairs from
+`data/solomon/`, uses truncated distances, and displays per-instance means, sample
+standard deviations and per-run iteration counts without exporting CSV files.
+SA's temperatures are documented heuristic defaults, not formally tuned values.
+See the notebook and [data notes](data/README.md) for the protocol.
 
 ## Roadmap
 

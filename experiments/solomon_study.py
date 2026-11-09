@@ -6,7 +6,8 @@ Protocol
   convention of the best known values), so gap = 100 (cost - BKS) / BKS is valid.
 - Tuning set: the first instance of each class (C101, C201, R101, R201, RC101, RC201).
   Test set: the other 50. No test instance is used to choose a parameter.
-- Same start (time-oriented nearest neighbor) and same time limit for every run.
+- Same truncated distances and time limit for every run. Construction is solver-specific:
+  SA uses randomized insertion rather than the other solvers' shared nearest-neighbor start.
 - Other algorithms plug in through ``ALGORITHMS``: a function ``(inst, cost, params, seed)``
   returning an object with ``routes``, ``cost``, ``seconds`` and ``iterations``, and a tuning grid.
   They are then run on the same instances, objective, seeds and time limit.
@@ -89,7 +90,8 @@ def _sa(inst: Instance, cost, params: dict, seed: int):
     """Simulated Annealing (Dag): compiled engine of src/cvrp/sa_static.py, distance objective.
 
     Its cooling is tied to elapsed time (T from 0.5 % of the start cost down to 0.02 over the
-    time limit), so it has no free parameter: the tuning grid is a single empty setting.
+    time limit), with fixed heuristic defaults, not empirically tuned SA parameters. The current
+    SA grid is one setting; it does not perform temperature selection.
     """
     params = dict(params)
     limit = params.pop("time_limit", TIME_LIMIT)
