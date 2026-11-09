@@ -5,69 +5,37 @@ title: Complexity
 
 # Complexity
 
-Owner: **Person 1**. Goal: prove the CVRP (and the CVRPTW) is NP-hard by polynomial reduction from
-a known NP-complete problem. Feeds section 5 of notebook 01.
+Author: Pablo. Same text as section 2 of the final notebook (`notebooks/02_final_deliverable.ipynb`).
 
-:::note[Proof skeleton]
-The structure below is what we expect to present. Each step lists what must be written out in
-full. Nothing here is a result until Person 1 completes it and the tutor validates it.
+**Decision version (DEC).** Given an instance and a number $B$, is there a feasible plan of total
+route duration at most $B$?
 
-:::
+**DEC is in NP.** A certificate is the list of routes with each truck's departure time (a rational
+of polynomial size: an optimal departure can be taken at a breakpoint of the piecewise linear
+schedule). Checking
+that every customer appears once, that each load is at most $Q$, and computing the schedule along
+each route (one matrix read, one comparison per visit) takes $O(n + K)$ operations; comparing the
+total with $B$ is one more.
 
-## What we need to show
+**Hamiltonian cycle reduces to DEC.** Let $G = (U, E)$ be a graph with $U = \{u_0, \dots, u_m\}$,
+$m \ge 2$. Build in $O(m^2)$ the instance: depot $u_0$, customers $u_1, \dots, u_m$, $K = 1$,
+$q_i = 1$, $Q = m$, $s_i = 0$, every window equal to the whole day, $\rho_h = 1$ for every $h$,
+$c_{ij} = 1/(m+1)$ minute if $\{u_i, u_j\} \in E$ and $c_{ij} = 2/(m+1)$ otherwise, and $B = 1$
+(so every plan fits in the day whatever $m$).
 
-- **CVRP-DEC** (decision version): given an instance and a bound $B$, is there a feasible solution
-  of cost at most $B$?
-- **Claim:** CVRP-DEC is NP-complete, hence the optimization CVRP is NP-hard.
+- If $G$ has a Hamiltonian cycle, start it at $u_0$: the truck follows it, each of its $m + 1$
+  trips takes $1/(m+1)$, no window makes it wait, so the duration is $1 \le B$.
+- If a plan has duration at most $1$: the single truck visits the $m$ customers once each and
+  returns, so its route is a cycle through all $m + 1$ nodes made of $m + 1$ trips. Each trip takes
+  at least $1/(m+1)$, so all of them take exactly $1/(m+1)$, and each one is an edge of $G$: the
+  route is a Hamiltonian cycle of $G$.
 
-The chain of reductions:
+Hamiltonian cycle is NP-complete (Karp, 1972), so DEC is **NP-complete** and the optimization
+problem is **NP-hard**. The instance built uses only the special case $K = 1$, $\rho_h = 1$, wide
+windows, which is the travelling salesman problem: capacity, windows and traffic add constraints
+to a problem that is already hard. Capacity alone is hard too: deciding whether $K$ trucks can
+carry the demands is bin packing (Garey and Johnson, 1979).
 
-```mermaid
-flowchart LR
-  HC[Hamiltonian cycle<br/>NP-complete, Karp 1972] -->|step 2| TSP[TSP decision]
-  TSP -->|step 3| CVRP[CVRP decision]
-  CVRP -->|step 4| CVRPTW[CVRPTW decision]
-```
-
-## Step 1: CVRP-DEC is in NP
-
-Certificate: a list of routes. Checking that each customer appears once, that each load is at most
-$Q$, that there are at most $K$ routes and that the total cost is at most $B$ takes $O(n)$ time
-(`Solution.violations` does exactly this). **TODO:** write formally.
-
-## Step 2: Hamiltonian cycle reduces to TSP
-
-Given a graph $H = (V, E)$ with $|V| = n$, build a complete graph with
-$c_{ij} = 1$ if $\{i, j\} \in E$ and $c_{ij} = 2$ otherwise, and set $B = n$.
-$H$ has a Hamiltonian cycle if and only if there is a tour of cost at most $n$.
-The construction is $O(n^2)$. **TODO:** prove both directions.
-
-## Step 3: TSP reduces to CVRP
-
-Given a TSP instance (complete graph, costs $c_{ij}$, bound $B$), choose any node as the depot,
-set $q_i = 1$ for each customer, $Q = n$ and $K = 1$. A single truck must visit every customer
-and come back: CVRP solutions are exactly TSP tours, with the same cost. The construction is
-linear. **TODO:** prove both directions; discuss that with free $K$ and triangle inequality an
-optimal CVRP solution with $Q \ge n$ also uses one route.
-
-Conclusion: CVRP-DEC is NP-complete; CVRP is NP-hard. The TSP is the special case, which is why
-the class hypothesis "the cycle is a Hamiltonian cycle" is true only for $K = 1$.
-
-## Step 4: CVRPTW is NP-hard
-
-Every CVRP instance is a CVRPTW instance with windows $[0, +\infty)$ and $s_i = 0$, so the
-CVRPTW generalizes the CVRP. Stronger, and worth citing: with a fixed number of vehicles, even
-*finding a feasible* CVRPTW solution is NP-complete (Savelsbergh, 1985, *to verify*).
-
-## Remark: capacity alone is already hard
-
-Deciding whether $K$ trucks suffice to carry all demands is the bin packing decision problem,
-which is strongly NP-complete (Garey and Johnson). So the CVRP is hard for two independent
-reasons: routing (TSP) and packing (bin packing). **Optional** for the deliverable.
-
-## What this means for the method
-
-- No polynomial exact algorithm is known: hypothesis 2 of the class sheet is expected to be refuted.
-- Exact ILP is usable only for small instances; [ILP model](./ilp-model.md).
-- For realistic sizes we use a metaheuristic whose **iterations** are polynomial, and we measure
-  quality with the gap and cost with the empirical time scaling.
+**Consequence.** No polynomial exact algorithm is expected. The [ILP model](./ilp-model.md) page measures
+where the exact ILP stops being usable; the [metaheuristics](./metaheuristic.md) handle the
+realistic sizes.

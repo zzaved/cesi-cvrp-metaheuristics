@@ -5,7 +5,7 @@ title: ILP model
 
 # Integer linear programming model
 
-Owner: **Person 1**. Feeds sections 3 and 4 of the final deliverable. The model of notebook 01 (route
+Author: Pablo. Feeds sections 3 and 4 of the final deliverable. The model of notebook 01 (route
 duration with hourly traffic) is `solve_tdvrptw`; the formulations below are its special cases
 without traffic, with total distance as objective, the ones the published best known values refer
 to. Code: `src/cvrp/ilp.py`. Notation: [Modeling](./modeling.md).
@@ -41,7 +41,7 @@ with (6) bounds the load by $Q$.
 
 Size: $n(n+1)$ binaries, $n$ continuous variables, $O(n^2)$ constraints. **Weakness:** the LP
 relaxation of MTZ is weak, so the lower bound is poor and branch and bound slows down quickly.
-Expected practical limit with CBC: around $n = 12$ to $20$. **TODO (P1-08):** measure it.
+Measured limit: MTZ stops at 10 to 14 customers in 60 s, flow and capacity cuts go beyond 16 (see below).
 
 ## Stronger alternative: rounded capacity cuts
 
@@ -113,10 +113,26 @@ $M = 2880$, objective $\sum_k (t_{n+1}^k - t_0^k)$. On the toy instance of noteb
 the optimum 247.16 min, the same value as an enumeration of every partition, order and departure
 time (`tests/test_ilp.py`).
 
-## TODO (Person 1)
+## Exact approach in practice
 
-- [x] Implement `solve_cvrp_mtz` and test it on the tiny instance (known optimum).
-- [x] Table: n against solve time and gap between bounds (`experiments/exact_study.py`, final notebook section 4).
-- [x] Implement the model of notebook 01 (`solve_tdvrptw`).
-- [x] Implement `solve_cvrptw`; test on a truncated Solomon instance (first 10 to 15 customers).
-- [x] Decide PuLP with CBC or OR-Tools: PuLP with HiGHS (`highspy`), since PuLP 4 found no CBC.
+`python experiments/exact_study.py` solves growing sub-instances (depot and first $n$ customers),
+HiGHS on one thread, 60 s per solve. Same text and tables as section 4 of the final notebook.
+
+| Model | Largest n proven optimal in 60 s | Remark |
+| --- | --- | --- |
+| CVRP, MTZ | 8 to 12 | weak LP relaxation (root gap 50 %) |
+| CVRP, flow and capacity cuts | 16 (largest tested), at most 4.4 s | root gap 23 % and 0.6 % |
+| CVRPTW, distance | 100 on C101 and R101 (3 s), 25 on RC101 | optima equal the BKS 827.3 and 1637.7 |
+| Model of notebook 01, with traffic | 7 to 8 | LP relaxation gives no bound |
+
+- **CVRP.** The strength of the LP relaxation, not the number of variables, decides how far each
+  formulation goes: capacity cuts prove all 12 optima in at most 0.35 s, MTZ stops at 10 to 14
+  customers.
+- **CVRPTW.** The full C101 and R101 are solved in about 3 s and their optima equal the best known
+  values, which checks the model and the distance convention. RC101 stops at the 60 s limit from
+  50 customers, with 6 to 13 % between solution and bound. One Tabu Search run of 5 s matches 18 of
+  the 21 proven optima (at most 1.1 % above) and beats the ILP on RC101 with 50 customers.
+- **With traffic.** Optimum up to 7 customers on every instance (8 on C101 and R101). The LP
+  relaxation is useless as a bound: with $x$ fractional, the big-M of (8) is switched off and the LP
+  value is $-n\,(l_0 - e_0)$. The exact model with traffic checks the objective on small cases;
+  it cannot plan a day.

@@ -47,7 +47,12 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Delivery',
       collapsed: true,
-      items: ['delivery/deliverables', 'delivery/checklist', 'delivery/presentation-plan'],
+      items: [
+        'delivery/final-notebook',
+        'delivery/deliverables',
+        'delivery/checklist',
+        'delivery/presentation-plan',
+      ],
     },
     {
       type: 'category',

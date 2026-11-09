@@ -10,7 +10,7 @@ Every technical term used in this project, in plain words. Alphabetical.
 | Term | Meaning |
 | --- | --- |
 | **2-opt** | Local search move that removes two edges of a route and reconnects it the other way, which reverses the segment in between. It removes crossings. |
-| **ALNS** | Adaptive Large Neighborhood Search. A metaheuristic that repeatedly destroys part of a solution and repairs it, choosing among several destroy and repair operators with probabilities that adapt to their past success. |
+| **ALNS** | Adaptive Large Neighborhood Search: destroy part of a solution and repair it, with operators chosen by their past success. Planned at first, not used in the final study. |
 | **Best known solution (BKS)** | The lowest cost ever reported for a benchmark instance. Not always proven optimal. |
 | **Big-M** | A large constant used to switch a constraint on or off with a binary variable, for example "if truck goes from i to j, then j starts after i finishes". |
 | **Capacity (Q)** | The maximum load a truck can carry. The sum of demands on a route cannot exceed it. |
@@ -19,8 +19,11 @@ Every technical term used in this project, in plain words. Alphabetical.
 | **CVRPTW** | CVRP with Time Windows. Each customer must be served inside a time interval. Our Level A. |
 | **Depot** | The place every route starts from and returns to. Node 0. |
 | **Destroy and repair** | The two halves of an LNS iteration: remove some customers from the solution, then insert them back, hopefully better. |
+| **Friedman test** | Non-parametric test that three or more algorithms have the same ranks over the instances. |
 | **Gap** | Relative distance to the best known solution: 100 times (our cost minus best known) divided by best known, in percent. |
+| **GRASP** | Greedy Randomized Adaptive Search Procedure: repeat (build a solution with a randomized greedy rule, improve it by local search) and keep the best. Our chosen method, with an iterated local search inside each iteration (GRASP-ILS). |
 | **Hamiltonian cycle** | A cycle in a graph that visits every node exactly once and returns to the start. |
+| **Holm correction** | Adjustment of p-values when several tests are made, so the chance of one false positive stays at 5 %. |
 | **ILP** | Integer Linear Programming. Optimization with a linear objective, linear constraints, and some variables forced to be integers. Solvable exactly, but slow on large instances. |
 | **Local search** | Improving a solution by repeatedly applying small changes (moves) while they reduce the cost. |
 | **Lower bound** | A value no solution can beat. Proves how far a solution can be from optimal. |
@@ -41,3 +44,4 @@ Every technical term used in this project, in plain words. Alphabetical.
 | **TSP** | Traveling Salesman Problem. Find the shortest Hamiltonian cycle. The CVRP with one truck and unlimited capacity. |
 | **VRPLIB** | The standard file format for vehicle routing instances, and the Python library `vrplib` that reads it. |
 | **Waiting time** | Time a truck spends at a customer between arriving early and the opening of the time window. |
+| **Wilcoxon signed rank test** | Paired non-parametric test: are the per-instance differences between two algorithms centered on zero? |

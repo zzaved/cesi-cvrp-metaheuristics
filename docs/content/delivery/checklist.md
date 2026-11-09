@@ -11,28 +11,26 @@ mirrors this list.
 
 ## Requirements
 
-- [ ] Mathematical model (ILP) (Person 1)
-- [ ] A metaheuristic: ALNS with SA acceptance; plain SA as baseline (Person 2)
-- [ ] Python solver handling realistic instance sizes, up to several thousand customers for the basic version (Person 2)
-- [ ] At least 20 instances from different usage scenarios (Person 3)
-- [ ] Visualizations and statistics (Person 3)
-- [ ] Validation on VRPLIB reference instances with the `vrplib` library (Person 3)
-- [ ] Gap formula applied everywhere: gap(%) = 100 * (cost_ours - cost_best_known) / cost_best_known (Person 3)
-- [ ] Analysis by instance size, customer distribution and constraints (capacity, time windows) (Person 3)
-- [ ] Level B: CVRP (Person 2)
-- [ ] Level A: CVRPTW (Person 2)
+- [x] Mathematical model (ILP), with traffic, solved by `solve_tdvrptw` (Pablo)
+- [x] Three metaheuristics from the course list: Tabu Search (Pablo), SA (Dag), GRASP-ILS (Farida)
+- [x] One method chosen from the data: GRASP-ILS
+- [x] At least 20 instances with best known values: 56 Solomon CVRPTW instances
+- [x] Gap formula applied everywhere: gap(%) = 100 * (cost_ours - cost_best_known) / cost_best_known
+- [x] Statistics: Friedman, Wilcoxon with Holm, 10 seeds, same 20 s budget
+- [x] Analysis by class (clustered, random, mixed; short and long horizon)
+- [x] Level A: CVRPTW; Level B: CVRP (exact study)
+- [ ] Scaling beyond 100 customers (limitation)
 
 ## Deliverables
 
-- [ ] Modeling notebook validated by the tutor (Person 1)
-- [ ] Final notebook complete, every section filled (all)
-- [ ] Experimental study notebook complete (Person 3)
+- [x] Modeling notebook validated by the tutor (Pablo)
+- [x] Final notebook complete, every section filled (`notebooks/02_final_deliverable.ipynb`)
+- [ ] Final notebook reviewed by the three of us
 - [ ] Presentation deck and live demo rehearsed (all)
 
 ## Quality gates
 
-- [ ] Every reported solution passes `Solution.violations` (Person 3)
-- [ ] Mean gap below 7 percent on VRPLIB CVRP instances (Person 2)
-- [ ] CI green on `main`: ruff and pytest (all)
-- [ ] Every bibliography entry verified (Person 1)
-- [ ] Hypotheses review in the exploration sheet completed (Person 1)
+- [x] Every reported solution feasible (1500 of 1500 benchmark runs)
+- [x] Mean gap below 7 % on the Solomon test set (GRASP-ILS 1.16 %)
+- [x] ruff and pytest green
+- [ ] Every bibliography entry verified

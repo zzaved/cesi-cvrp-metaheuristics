@@ -10,15 +10,16 @@ looks at: **a correct model** (Person 1), **a solver that finds good solutions f
 and **evidence that it does** (Person 3). Each lane owns its code, its notebook sections and its
 documentation pages, so two people never edit the same thing at the same time.
 
-:::tip[Decide at today's kickoff]
-The names are not assigned yet: we pick who takes which lane in the
-[kickoff meeting](./management/kickoff-meeting.md). Write the result here.
+:::tip[Who took which lane]
+Each of us also implemented one metaheuristic, so that three could be compared (Tabu Search, SA,
+GRASP-ILS); on 9 November Dag and Farida agreed that Pablo writes the final notebook from the three
+studies.
 
 | Lane | Person | Name |
 | --- | --- | --- |
-| Modeling and exact methods | Person 1 | _to assign_ |
-| Metaheuristic engine | Person 2 | Dagmawi |
-| Data, experiments and communication | Person 3 | _to assign_ |
+| Modeling and exact methods (and Tabu Search) | Person 1 | Pablo |
+| Metaheuristic engine (Simulated Annealing) | Person 2 | Dagmawi |
+| Data, experiments and communication (GRASP-ILS) | Person 3 | Farida |
 
 :::
 

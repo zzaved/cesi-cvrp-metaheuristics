@@ -26,18 +26,21 @@ flowchart LR
 
 ## Modules
 
-| Module | Responsibility | Status | Lane |
-| --- | --- | --- | --- |
-| `instance.py` | `Instance` dataclass, VRPLIB and Solomon loaders, random generator | implemented; depot reordering and mixed generator TODO | Person 3 |
-| `solution.py` | `Solution` (list of routes), cost, loads, full constraint check | implemented | Person 2 |
-| `utils.py` | Distance matrix (numpy broadcast, rounding conventions), RNG, timer, gap | implemented | shared |
-| `construct.py` | Nearest neighbor, Clarke and Wright, sweep | NN implemented; others TODO | Person 1 |
-| `neighborhoods.py` | 2-opt, relocate, swap, Or-opt, cross-exchange, VND driver | 2-opt, relocate, driver implemented | Person 2 |
-| `alns.py` | ALNS engine, destroy and repair operators | engine, random, worst, greedy implemented | Person 2 |
-| `sa.py` | SA acceptance helpers, plain SA baseline | helpers implemented; baseline TODO | Person 3 |
-| `timewindows.py` | Schedules, waiting, window feasibility, forward slack | schedule and feasibility implemented | Person 2 |
-| `ilp.py` | MTZ CVRP and CVRPTW models with PuLP | TODO | Person 1 |
-| `viz.py` | Route plots, convergence curves | implemented | Person 3 |
+| Module | Responsibility | Author |
+| --- | --- | --- |
+| `instance.py` | `Instance` dataclass, VRPLIB and Solomon loaders, random generator | shared |
+| `solution.py` | `Solution` (list of routes), cost, loads, full constraint check (the shared evaluator) | shared |
+| `utils.py` | Distance matrix (rounding conventions), RNG, timer, gap | shared |
+| `ilp.py` | Exact models with PuLP and HiGHS: the model with traffic (`solve_tdvrptw`), CVRPTW, three CVRP formulations | Pablo |
+| `construct.py` | Nearest neighbor, Clarke and Wright, sweep | Pablo |
+| `tabu.py` | Tabu Search, route costs (distance, duration with traffic) | Pablo |
+| `grasp.py` | GRASP and GRASP-ILS, the chosen method | Farida |
+| `sa.py`, `sa_static.py`, `sa_vrptw.py`, `sa_protocol.py` | Simulated Annealing (compiled with numba) | Dag |
+| `alns.py`, `neighborhoods.py`, `timewindows.py` | early scaffold (ALNS, moves, schedules), not used in the final study | shared |
+| `viz.py` | Route plots, convergence curves | shared |
+
+Experiments: `experiments/solomon_study.py` (tuning and benchmark of the three metaheuristics),
+`experiments/solomon_report.py` (tables and tests), `experiments/exact_study.py` (exact approach).
 
 ## Conventions
 
@@ -48,24 +51,9 @@ flowchart LR
 - **Hot paths are vectorized.** Deltas for all candidates are computed with numpy fancy indexing,
   then `argmin`. Python loops only remain over customers or routes, not over positions.
 - **Style.** PEP 8 via `ruff` (line length 99), Google docstrings, type hints on every function.
-- **TODO markers** name the lane: `TODO(Person 2): ...`. `grep -rn "TODO(Person" src` lists the work.
 
 ## Tests
 
-| File | Covers |
-| --- | --- |
-| `tests/test_instance.py` | distance matrix, rounding, properties, VRPLIB loader, reproducible generator, gap |
-| `tests/test_solution.py` | route cost, feasibility, violation messages, waiting, late arrival |
-| `tests/test_neighborhoods.py` | NN feasibility, 2-opt, relocate, local search never worsens |
-| `tests/test_alns_smoke.py` | full pipeline on a tiny instance, reproducibility, time windows |
-
-## Performance log
-
-To fill by Person 2 (P2-08): instance, n, seconds per 1000 ALNS iterations, before and after each
-optimization.
-
-| Change | X-n101 | X-n502 | X-n1001 |
-| --- | --- | --- | --- |
-| baseline (scaffold) | | | |
-| granular neighborhoods | | | |
-| numba | | | |
+`pytest` runs 76 tests: the shared evaluator (`test_solution.py`), the loaders (`test_instance.py`),
+the exact models including the toy optimum of notebook 01 (`test_ilp.py`), and each metaheuristic
+(`test_tabu.py`, `test_grasp.py`, `test_sa*.py`).
