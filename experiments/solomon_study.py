@@ -16,6 +16,9 @@ Usage:
     python experiments/solomon_study.py run    # -> results/solomon_benchmark.csv
     python experiments/solomon_study.py tune grasp   # one algorithm only
     python experiments/solomon_study.py run grasp    # -> results/solomon_benchmark_grasp.csv
+
+Algorithms: Tabu Search (Pablo), GRASP (Farida), Simulated Annealing (Dag, through
+experiments/sa_adapter.py; needs numba: pip install numba). Hill Climbing is not in the study.
 """
 
 from __future__ import annotations
@@ -34,8 +37,11 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from types import SimpleNamespace  # noqa: E402
 
+from sa_adapter import run_sa  # noqa: E402  (experiments/sa_adapter.py, compiles SA once)
+
 from cvrp.grasp import GRASPParams, grasp  # noqa: E402
 from cvrp.instance import Instance  # noqa: E402
+from cvrp.solution import Solution  # noqa: E402
 from cvrp.tabu import TabuParams, distance_cost, tabu_search  # noqa: E402
 from cvrp.utils import distance_matrix  # noqa: E402
 
@@ -79,6 +85,26 @@ def _grasp(inst: Instance, cost, params: dict, seed: int):
     )
 
 
+def _sa(inst: Instance, cost, params: dict, seed: int):
+    """Simulated Annealing (Dag): compiled engine of src/cvrp/sa_static.py, distance objective.
+
+    Its cooling is tied to elapsed time (T from 0.5 % of the start cost down to 0.02 over the
+    time limit), so it has no free parameter: the tuning grid is a single empty setting.
+    """
+    params = dict(params)
+    limit = params.pop("time_limit", TIME_LIMIT)
+    out = run_sa(inst, seed=seed, time_limit=limit)
+    routes = out["routes"]
+    if not Solution(routes=[list(r) for r in routes]).is_feasible(inst):  # shared evaluator
+        raise RuntimeError(f"SA returned an infeasible solution on {inst.name}")
+    return SimpleNamespace(
+        routes=routes,
+        cost=sum(cost(tuple(r)) for r in routes),
+        seconds=out["elapsed"],
+        iterations=out["iterations"],
+    )
+
+
 # name -> (solver, tuning grid)
 ALGORITHMS = {
     "tabu": (_tabu, {"tenure": [5, 10, 20], "candidates": [50, 200, 500]}),
@@ -86,6 +112,7 @@ ALGORITHMS = {
         _grasp,
         {"alpha": [0.1, 0.3, 0.5], "improvement": ["first", "best"], "perturb_kicks": [0, 90]},
     ),
+    "sa": (_sa, {}),
 }
 
 
