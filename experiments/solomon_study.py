@@ -1,4 +1,4 @@
-"""Benchmark of Tabu Search on the 56 Solomon CVRPTW instances.
+"""Benchmark of the metaheuristics (Tabu Search, GRASP-ILS, SA) on the 56 Solomon CVRPTW instances.
 
 Protocol
 - Instances: data/solomon/*.txt with their best known solution (*.sol), PyVRP/VRPLIB copy.
@@ -6,8 +6,8 @@ Protocol
   convention of the best known values), so gap = 100 (cost - BKS) / BKS is valid.
 - Tuning set: the first instance of each class (C101, C201, R101, R201, RC101, RC201).
   Test set: the other 50. No test instance is used to choose a parameter.
-- Same truncated distances and time limit for every run. Construction is solver-specific:
-  SA uses randomized insertion rather than the other solvers' shared nearest-neighbor start.
+- Same truncated distances and time limit for every run, construction included. Each solver
+  builds its own start (nearest neighbor for Tabu Search, randomized insertion for GRASP and SA).
 - Other algorithms plug in through ``ALGORITHMS``: a function ``(inst, cost, params, seed)``
   returning an object with ``routes``, ``cost``, ``seconds`` and ``iterations``, and a tuning grid.
   They are then run on the same instances, objective, seeds and time limit.
@@ -24,6 +24,7 @@ experiments/sa_adapter.py; needs numba: pip install numba). Hill Climbing is not
 
 from __future__ import annotations
 
+import ast
 import itertools
 import os
 import platform
@@ -132,6 +133,7 @@ def run_one(job: tuple[str, str, dict, int]) -> dict:
     cost = distance_cost(inst)
     res = ALGORITHMS[algo][0](inst, cost, params, seed)
     served = sorted(c for r in res.routes for c in r) == list(range(1, inst.n_customers + 1))
+    valid = Solution(routes=[list(r) for r in res.routes]).is_feasible(inst)  # shared evaluator
     check = sum(cost(tuple(r)) for r in res.routes)
     return {
         "instance": name,
@@ -147,7 +149,7 @@ def run_one(job: tuple[str, str, dict, int]) -> dict:
         "seconds": round(res.seconds, 2),
         "iterations": res.iterations,
         "routes": len(res.routes),
-        "feasible": served and abs(check - res.cost) < 1e-6,
+        "feasible": served and valid and abs(check - res.cost) < 1e-6,
     }
 
 
@@ -175,7 +177,7 @@ def best_params(tuning: pd.DataFrame, algo: str) -> dict:
     """Parameters with the lowest mean gap on the tuning set."""
     t = tuning[tuning.algorithm == algo].groupby("params").gap.mean()
     print(f"{algo} tuning (mean gap %):\n{t.sort_values().round(2).to_string()}")
-    return eval(t.idxmin())  # noqa: S307  (our own str(dict))
+    return ast.literal_eval(t.idxmin())
 
 
 def tune_jobs(algos: list[str]) -> list:
