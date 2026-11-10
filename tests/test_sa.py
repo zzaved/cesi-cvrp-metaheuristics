@@ -77,3 +77,85 @@ def test_invalid_initial_solution_is_rejected(tiny):
 def test_invalid_parameters_are_rejected(kwargs):
     with pytest.raises(ValueError):
         SAParams(**kwargs)
+
+
+@pytest.mark.parametrize("fixture", ["tiny", "tiny_tw"])
+def test_untimed_shared_solver_is_feasible_and_seed_reproducible(request, fixture):
+    inst = request.getfixturevalue(fixture)
+    initial = Solution([[1, 2], [3, 4], [5, 6]])
+    before = initial.copy().routes
+    params = SAParams(time_limit=None, iterations=1025)
+    first = sa(inst, params, seed=7, initial=initial)
+    second = sa(inst, params, seed=7, initial=initial)
+    assert first.iterations == second.iterations == 1025
+    assert first.stop_reason == second.stop_reason == "iterations"
+    assert first.best.is_feasible(inst)
+    assert second.best.routes == first.best.routes
+    assert second.cost == first.cost <= initial.cost(inst) + 1e-8
+    assert first.accepted == second.accepted
+    assert initial.routes == before
+
+
+def test_untimed_cooling_ignores_clock_and_reaches_final_temperature(tiny, monkeypatch):
+    import itertools
+    from types import SimpleNamespace
+
+    from cvrp import sa_static
+    from cvrp.sa_vrptw import problem_from_instance, validate
+
+    clock = itertools.count(0, 1_000_000)
+    monkeypatch.setattr(sa_static, "time", SimpleNamespace(perf_counter=lambda: next(clock)))
+    temperatures = []
+    original_batch = sa_static._batch
+
+    def capture(*args):
+        temperatures.append(args[12])
+        return original_batch(*args)
+
+    def initialize(problem, rng, deadline):
+        assert deadline == math.inf
+        return [[1, 2], [3, 4], [5, 6]]
+
+    monkeypatch.setattr(sa_static, "_batch", capture)
+    result = sa_static.anneal_static(
+        problem_from_instance(tiny), initialize, validate,
+        time_limit=None, max_iterations=257, final_temperature=0.02,
+    )
+    assert result["iterations"] == 257
+    assert result["stop_reason"] == "iterations"
+    assert result["time_limit"] is None
+    assert len(temperatures) == 2
+    assert temperatures[0] > temperatures[1]
+    assert temperatures[-1] == pytest.approx(0.02)
+    assert Solution(result["routes"]).is_feasible(tiny)
+
+
+def test_untimed_engine_requires_a_finite_move_schedule(tiny):
+    from cvrp.sa_static import anneal_static
+    from cvrp.sa_vrptw import initialize, problem_from_instance, validate
+
+    with pytest.raises(ValueError, match="max_iterations is required"):
+        anneal_static(problem_from_instance(tiny), initialize, validate, time_limit=None)
+
+
+def test_capacity_bounded_padding_preserves_the_sa_search(monkeypatch):
+    from types import SimpleNamespace
+
+    from cvrp import Instance, sa_static
+    from cvrp.sa_vrptw import initialize, problem_from_instance, validate
+
+    inst = Instance.random(n=100, seed=4)
+    inst.capacity = 5
+    inst.demands[1:] = 1
+    initial = [list(range(start, start + 5)) for start in range(1, 101, 5)]
+    problem = problem_from_instance(inst)
+    kwargs = dict(time_limit=None, max_iterations=4097, initial=initial, seed=3)
+    compact = sa_static.anneal_static(problem, initialize, validate, **kwargs)
+    # Disable only the capacity-based allocation shortcut to compare the exact
+    # proposed-move sequence with full n+1 padding under the same seed.
+    full_numpy = SimpleNamespace(**(vars(np) | {"all": lambda values: False}))
+    monkeypatch.setattr(sa_static, "np", full_numpy)
+    full = sa_static.anneal_static(problem, initialize, validate, **kwargs)
+    assert compact["routes"] == full["routes"]
+    assert compact["metrics"]["distance"] == full["metrics"]["distance"]
+    assert compact["accepted"] == full["accepted"]
