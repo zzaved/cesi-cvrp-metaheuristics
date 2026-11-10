@@ -36,22 +36,28 @@ class SAParams:
 
     Attributes:
         initial_temperature_factor: T0 = max(1, factor * construction distance).
-        final_temperature: Temperature approached at the wall-clock deadline.
+        final_temperature: Temperature at the end of the cooling schedule.
         iterations: Maximum proposed move attempts, including early rejections.
+            With no time limit, this also sets the length of the cooling schedule.
         time_limit: Search budget in seconds, including route construction.
+            ``None`` disables the deadline and cools by proposed move count instead.
     """
 
     initial_temperature_factor: float = 0.005
     final_temperature: float = 0.02
     iterations: int = 10**9
-    time_limit: float = 20.0
+    time_limit: float | None = 20.0
 
     def __post_init__(self):
         """Reject invalid budgets and temperatures before compiling or searching."""
-        for name in ("initial_temperature_factor", "final_temperature", "time_limit"):
+        for name in ("initial_temperature_factor", "final_temperature"):
             value = getattr(self, name)
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be finite and positive")
+        if self.time_limit is not None and (
+            not math.isfinite(self.time_limit) or self.time_limit <= 0
+        ):
+            raise ValueError("time_limit must be finite and positive or None")
         if not isinstance(self.iterations, (int, np.integer)) or self.iterations <= 0:
             raise ValueError("iterations must be a positive integer")
 

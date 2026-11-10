@@ -173,9 +173,15 @@ def anneal_static(
     final_temperature=0.02,
     max_iterations=None,
 ):
-    """Run SA with cooling tied to elapsed time, including initialization."""
-    if not math.isfinite(time_limit) or time_limit <= 0:
-        raise ValueError("time_limit must be finite and positive")
+    """Run shared SA with elapsed-time cooling or an untimed move-count schedule.
+
+    Timed calls retain their existing schedule. With ``time_limit=None``, a
+    positive ``max_iterations`` is required: the same exponential temperature
+    interpolation follows proposed move count and reaches the final temperature
+    in the last batch. Initialization and validation have no deadline in this mode.
+    """
+    if time_limit is not None and (not math.isfinite(time_limit) or time_limit <= 0):
+        raise ValueError("time_limit must be finite and positive or None")
     if not math.isfinite(initial_temperature_factor) or initial_temperature_factor <= 0:
         raise ValueError("initial_temperature_factor must be finite and positive")
     if not math.isfinite(final_temperature) or final_temperature <= 0:
@@ -184,13 +190,21 @@ def anneal_static(
         not isinstance(max_iterations, (int, np.integer)) or max_iterations <= 0
     ):
         raise ValueError("max_iterations must be a positive integer or None")
+    if time_limit is None and max_iterations is None:
+        raise ValueError("max_iterations is required when time_limit is None")
     started = time.perf_counter()
-    deadline = started + time_limit
+    deadline = math.inf if time_limit is None else started + time_limit
     rng = np.random.default_rng(seed)
     initial_routes = initialize(p, rng, deadline) if initial is None else initial
     initial_metrics = validate(p, initial_routes)
     slots = min(p.max_vehicles, p.n)
-    routes = np.zeros((slots, p.n + 1), dtype=np.int64)
+    width = p.n + 1
+    if time_limit is None and np.all(p.q[1:] > 0):
+        # Bound padding by capacity for large untimed runs. Two feasible routes
+        # plus a short relocated chain cover all temporary move candidates.
+        max_customers = min(p.n, int(p.capacity / float(p.q[1:].min())))
+        width = min(p.n, 2 * max_customers + 3) + 1
+    routes = np.zeros((slots, width), dtype=np.int64)
     lengths = np.zeros(slots, dtype=np.int64)
     costs = np.zeros(slots)
     for i, route in enumerate(initial_routes):
@@ -204,11 +218,15 @@ def anneal_static(
     history = [(time.perf_counter() - started, initial_metrics["distance"], len(initial_routes))]
     history_iterations = [0]
     iterations = accepted = 0
-    while time.perf_counter() < deadline:
+    while time_limit is None or time.perf_counter() < deadline:
         if max_iterations is not None and iterations >= max_iterations:
             break
         steps = 256 if max_iterations is None else min(256, max_iterations - iterations)
-        progress = min(1.0, (time.perf_counter() - started) / time_limit)
+        progress = (
+            (iterations + steps) / max_iterations
+            if time_limit is None
+            else min(1.0, (time.perf_counter() - started) / time_limit)
+        )
         temperature = initial_temperature * (final_temperature / initial_temperature) ** progress
         old_best = best_energy
         best_energy, count = _batch(
