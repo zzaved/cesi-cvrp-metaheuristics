@@ -66,66 +66,53 @@ what we have now:
 | R9 | **What happens during the night?** | traffic factor 1 at night, 48 h horizon | night against morning departure, with numbers |
 
 R9 has two readings: the traffic at night (our reading), or what an algorithm gains when it runs
-all night. The plan covers both (task P3 and the long runs of A3); Pablo confirms with the
+all night. The plan covers both (task P3 and the overnight long runs); Pablo confirms with the
 professor.
 
-### Deadlines
+### Timeline
 
-```mermaid
-gantt
-  title Final sprint
-  dateFormat YYYY-MM-DD HH:mm
-  axisFormat %d %H:%M
-  section All
-  Sprint call                       :milestone, a1, 2026-11-10 11:00, 0d
-  Solver freeze (10k smoke test)    :milestone, a2, 2026-11-11 14:00, 0d
-  Overnight campaign                :a3, 2026-11-11 22:00, 10h
-  Results meeting                   :milestone, a4, 2026-11-12 11:00, 0d
-  Hand in                           :milestone, a5, 2026-11-12 18:00, 0d
-  Rehearsal                         :milestone, a6, 2026-11-12 20:00, 0d
-  Presentation                      :milestone, a7, 2026-11-13 09:00, 0d
-  section Pablo
-  P1 scale and real graph harness   :p1, 2026-11-10 11:30, 5h
-  P2 Tabu at 10k and sensitivity    :p2, 2026-11-10 17:00, 19h
-  P3 France and Egypt, night        :p3, 2026-11-11 09:00, 9h
-  P4 notebook and docs              :p4, 2026-11-12 08:00, 8h
-  section Dag
-  D1 SA at 10k                      :d1, 2026-11-10 11:30, 10h
-  D2 SA sensitivity                 :d2, 2026-11-10 22:00, 14h
-  D3 SA analysis and slides         :d3, 2026-11-12 08:00, 4h
-  section Farida
-  F1 GRASP-ILS at 10k               :f1, 2026-11-10 11:30, 10h
-  F2 GRASP-ILS sensitivity          :f2, 2026-11-10 22:00, 14h
-  F3 deck without code              :f3, 2026-11-11 14:00, 28h
-```
+Everything is finished on **11 November at night**; 12 November is hand in, rehearsal and buffer.
 
-The hand in hour (18:00) and the presentation hour are **to confirm**.
+| When | Who | What |
+| --- | --- | --- |
+| 10 Nov 11:00 | all | 30 min call: agree on this plan, the two cities, the time budgets |
+| 10 Nov 11:30 to 16:00 | all | sensitivity study of your own algorithm on the 6 Solomon tuning instances |
+| 10 Nov by 14:00 | Pablo | scale harness ready, smoke test at n = 1 000 with one command |
+| 10 Nov 14:00 to 20:00 | Farida, Pablo | GRASP-ILS and Tabu Search run at 1k, 2k, 5k, 10k customers |
+| 10 Nov 14:00 to 18:00 | Dag | SA run at 1k, 2k, 5k, 10k with the harness command; report where it stops |
+| 10 Nov 14:00 to 20:00 | Pablo | France and Egypt instances, network metrics, traffic profiles, night experiment |
+| 10 Nov 20:00 | all | freeze: every algorithm passes the 10 000 smoke test |
+| 10 Nov 21:00 to 11 Nov 07:00 | Pablo's M2 | overnight campaign and one long run per algorithm |
+| 11 Nov 09:00 | all | results meeting: scenario table, story of the deck |
+| 11 Nov 09:00 to 12:00 | all | analysis paragraph of your own algorithm and its 2 slides |
+| 11 Nov 09:00 to 15:00 | Pablo | final notebook, docs, live demo |
+| 11 Nov 09:00 to 16:00 | Farida | deck, no code |
+| 11 Nov 16:00 | all | deck v1 complete; professor agent review |
+| 11 Nov 20:00 | all | rehearsal 1, timed, with question drill |
+| 12 Nov | all | hand in, rehearsal 2, buffer |
+| 13 Nov | all | presentation |
 
 ### Tasks and deliverables
 
-Each person keeps their lane: the harness is shared, each algorithm is made to scale and studied
-by its author.
+Each person keeps their lane: the harness is shared, each algorithm is studied by its author.
 
 | ID | Owner | Task | Deliverable | Due |
 | --- | --- | --- | --- | --- |
-| A1 | all | 30 min call: agree this plan, the cities, the time budgets | decisions in the weekly log | 10 Nov 11:00 |
-| P1 | Pablo | Instance builders: uniform and clustered points, random graph (NetworkX), OpenStreetMap city (osmnx), travel time matrix by shortest paths (scipy), network metrics; loader for the Belgium set (CVRPLIB); `experiments/scale_study.py` with the `ALGORITHMS` hook; matrices saved as `.npy` and memory mapped (8 GB of RAM: a 10 000 matrix is 800 MB) | `src/cvrp/graphs.py`, `experiments/scale_study.py`, a smoke test at n = 1 000 that anyone runs with one command | 10 Nov 16:30 |
-| D1 | Dag | SA runs at n = 1 000, 2 000, 5 000, 10 000 on the P1 instances: no per iteration work in O(n²), read only matrix | SA plugged into `ALGORITHMS`; table of n, time per iteration, peak memory, largest n that works | 10 Nov 22:00 |
-| F1 | Farida | GRASP-ILS at the same sizes: the regret construction is the expected bottleneck (granular insertion candidates) | GRASP-ILS plugged into `ALGORITHMS`; the same table | 10 Nov 22:00 |
-| P2 | Pablo | Tabu Search at the same sizes; sensitivity of tenure, candidate list size, neighbor list size | the same table; sensitivity CSV and curves | 11 Nov 12:00 |
-| D2 | Dag | SA sensitivity: start factor $f$, final temperature $T_f$, move probabilities; acceptance rate against time | CSV and curves, one sentence each | 11 Nov 12:00 |
-| F2 | Farida | GRASP-ILS sensitivity: $\alpha$ from 0 to 1, number of kicks (0 to 250), kick size, neighbor list size; iterations against $\alpha$ | CSV and curves, one sentence each | 11 Nov 12:00 |
-| A2 | all | Freeze: each algorithm finishes the 10 000 smoke test in its budget | the three commits merged in `Dev_Pablo` | 11 Nov 14:00 |
-| P3 | Pablo | France and Egypt: one city each (proposal: Lyon and Cairo), same area and same n; network metrics table; an hourly traffic profile per city; the night: same customers, departure at 8:00 against 22:00, duration objective, exact on small n and metaheuristics on large n | instances in `data/osm/`, metrics table, night table | 11 Nov 18:00 |
-| A3 | all (Pablo's M2) | Overnight campaign, protocol below; plus one long run per algorithm on the 10 000 instance (convergence over hours) | `results/scale_benchmark.csv`, `results/long_runs.csv` | 12 Nov 08:00 |
-| A4 | all | Results meeting: read the tables, write the scenario recommendation together; each author writes the analysis of their algorithm in their own words | scenario table, three analysis paragraphs | 12 Nov 11:00 |
-| D3 | Dag | SA slides (no code) and its analysis paragraph | slides in the deck | 12 Nov 12:00 |
-| P4 | Pablo | Final notebook: new sections on scale and real world, sensitivity, scenario recommendation; sections 4, 8 and 9 updated; docs mirrored; professor agent review | `notebooks/02_final_deliverable.ipynb` executed, docs build | 12 Nov 16:00 |
-| F3 | Farida | Deck without code: context, model, complexity, exact limit, methods, Solomon results, scale and real world, sensitivity, scenario recommendation, limits, next steps | deck (PDF) | 12 Nov 16:00 |
-| A5 | all | Hand in | notebook, deck, repository tag | 12 Nov 18:00 |
-| A6 | all | Rehearsal, timed, and a question drill (night, limits, France and Egypt, why GRASP-ILS) | timing per speaker | 12 Nov 20:00 |
+| P1 | Pablo | Instance builders (uniform, clustered, random graph with NetworkX, OpenStreetMap city with osmnx), travel times by shortest paths (scipy), network metrics, Belgium set (CVRPLIB), `experiments/scale_study.py` with the `ALGORITHMS` hook, matrices memory mapped (8 GB of RAM) | `src/cvrp/graphs.py`, `experiments/scale_study.py`, one command smoke test | 10 Nov 14:00 |
+| P2 | Pablo | Tabu Search at 10 000; sensitivity of tenure, candidate list, neighbor list | scale table, sensitivity CSV and curves | 10 Nov 20:00 |
+| P3 | Pablo | France and Egypt (proposal: Lyon and Cairo): metrics, traffic profile, departure 8:00 against 22:00 | instances, metrics table, night table | 10 Nov 20:00 |
+| P4 | Pablo | Final notebook and docs; SA adapter for the scale harness; live demo (outputs only) | notebook executed, docs build, demo | 11 Nov 15:00 |
+| D1 | Dag | Run SA at 1k, 2k, 5k, 10k with the P1 command; the size where it fails is the measured limit | table of n, time, peak memory, largest n that works | 10 Nov 18:00 |
+| D2 | Dag | SA sensitivity of $f$ and $T_f$, 3 seeds, one curve each | CSV and 2 curves, one sentence each | 10 Nov 16:00 |
+| D3 | Dag | SA analysis paragraph and 2 SA slides | text, slides | 11 Nov 12:00 |
+| F1 | Farida | GRASP-ILS at 1k, 2k, 5k, 10k (granular insertion candidates in the construction) | GRASP-ILS in `ALGORITHMS`, same table as D1 | 10 Nov 20:00 |
+| F2 | Farida | GRASP-ILS sensitivity: $\alpha$, kicks, kick size, neighbor list; iterations against $\alpha$ | CSV and curves, one sentence each | 10 Nov 16:00 |
+| F3 | Farida | Deck without code; GRASP-ILS analysis paragraph | deck v1 | 11 Nov 16:00 |
 
-### Scale campaign protocol (A3)
+Sensitivity rule: one factor at a time around the tuned value, the 6 tuning instances, at least 3
+seeds, 20 s per run, mean gap with its spread, one sentence per curve, plus one behavior measure.
+
+### Scale campaign protocol (overnight)
 
 | Item | Value |
 | --- | --- |
@@ -140,7 +127,7 @@ by its author.
 | Tests | Friedman, then Wilcoxon with Holm, as in section 8 |
 | Size | about 13 worker hours for 3 seeds: about 3.5 h of wall clock |
 
-### Scenario recommendation (to fill on 12 November, A4)
+### Scenario recommendation (to fill on 11 November, 09:00)
 
 | Scenario | Recommended | Why (number from our data) |
 | --- | --- | --- |
