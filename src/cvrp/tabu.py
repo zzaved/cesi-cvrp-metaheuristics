@@ -35,9 +35,21 @@ RHO = (1.00, 1.00, 1.00, 1.00, 1.00, 1.05, 1.30, 1.75, 1.80, 1.40, 1.20, 1.25,
 
 
 # ----------------------------------------------------------------------------- route costs
+LIST_MATRIX_MAX = 3000  # above this many nodes the matrix stays a numpy array (memory)
+
+
+def _rows(inst: Instance):
+    """The matrix as nested lists (fast access) when small, as the numpy array when large.
+
+    Nested lists take about 32 bytes per entry: 3 GB at 10 000 customers, so large instances
+    read the array directly (slower access, no copy; a memory mapped matrix stays on disk).
+    """
+    return inst.dist.tolist() if len(inst.dist) <= LIST_MATRIX_MAX else inst.dist
+
+
 def distance_cost(inst: Instance) -> RouteCost:
     """Route length, or inf if it breaks capacity or a time window (travel time = distance)."""
-    d = inst.dist.tolist()
+    d = _rows(inst)
     q = inst.demands.tolist()
     cap = inst.capacity
     tw = inst.has_time_windows
@@ -69,7 +81,7 @@ def duration_cost(
     The truck leaves the depot at ``start_min`` (minutes after midnight); a trip leaving at time
     t takes ``rho[hour(t)] * dist``. Waiting before a window and service time are included.
     """
-    d = inst.dist.tolist()
+    d = _rows(inst)
     q = inst.demands.tolist()
     cap = inst.capacity
     tw = inst.has_time_windows
@@ -95,13 +107,23 @@ def duration_cost(
     return cost
 
 
+MEMO_MAX = 1_000_000  # routes kept in the cache; it is emptied when full (memory)
+
+
 def cached(cost: RouteCost) -> RouteCost:
-    """Memoize a route cost: the search revisits the same routes many times."""
+    """Memoize a route cost: the search revisits the same routes many times.
+
+    The cache is emptied when it holds ``MEMO_MAX`` routes: on 10 000 customers a long run
+    evaluates tens of millions of routes and an unbounded cache would fill the memory.
+    """
     memo: dict[tuple[int, ...], float] = {(): 0.0}
 
     def wrapped(route: tuple[int, ...]) -> float:
         v = memo.get(route)
         if v is None:
+            if len(memo) >= MEMO_MAX:
+                memo.clear()
+                memo[()] = 0.0
             v = memo[route] = cost(route)
         return v
 
@@ -115,20 +137,24 @@ def nearest_feasible(inst: Instance, cost: RouteCost) -> Routes:
     Extend the route with the closest customer that keeps it feasible; open a new route when
     none does.
     """
-    left = set(range(1, inst.n_customers + 1))
-    d = inst.dist
+    alive = np.ones(inst.n_customers + 1, dtype=bool)
+    alive[0] = False
+    q = inst.demands
     routes: Routes = []
-    while left:
+    while alive.any():
         route: list[int] = []
-        last = 0
+        last, load = 0, 0.0
         while True:
-            options = sorted(left, key=lambda c: d[last, c])
-            nxt = next((c for c in options if math.isfinite(cost((*route, c)))), None)
+            cand = np.flatnonzero(alive & (q <= inst.capacity - load + 1e-9))
+            if not len(cand):
+                break
+            cand = cand[np.argsort(np.asarray(inst.dist[last])[cand], kind="stable")]
+            nxt = next((int(c) for c in cand if math.isfinite(cost((*route, int(c))))), None)
             if nxt is None:
                 break
             route.append(nxt)
-            left.remove(nxt)
-            last = nxt
+            alive[nxt] = False
+            last, load = nxt, load + q[nxt]
         if not route:
             raise ValueError("a customer cannot be served alone: instance infeasible")
         routes.append(route)
@@ -199,12 +225,22 @@ def _apply(routes: Routes, move: Move) -> Routes:
 
 
 def neighbor_lists(inst: Instance, k: int) -> list[list[int]]:
-    """For every customer, its ``k`` nearest customers (depot excluded)."""
-    d = inst.dist.copy()
-    np.fill_diagonal(d, np.inf)
-    d[:, 0] = np.inf
-    order = np.argsort(d, axis=1)[:, : min(k, inst.n_customers - 1)]
-    return [[]] + [order[c].tolist() for c in range(1, inst.n_customers + 1)]
+    """For every customer, its ``k`` nearest customers (depot excluded).
+
+    Computed by blocks of rows so that a large matrix is never copied whole.
+    """
+    n = inst.n_customers
+    k = min(k, n - 1)
+    out: list[list[int]] = [[]]
+    for start in range(1, n + 1, 1000):
+        rows = np.array(inst.dist[start : start + 1000], dtype=float)
+        rows[:, 0] = np.inf
+        rows[np.arange(len(rows)), np.arange(start, start + len(rows))] = np.inf
+        part = np.argpartition(rows, k - 1, axis=1)[:, :k]
+        near = np.take_along_axis(rows, part, axis=1)
+        order = np.take_along_axis(part, np.argsort(near, axis=1, kind="stable"), axis=1)
+        out += order.tolist()
+    return out
 
 
 # ----------------------------------------------------------------------------- algorithms
