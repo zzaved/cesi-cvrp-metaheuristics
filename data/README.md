@@ -48,6 +48,32 @@ Each `.vrp` should come with its `.sol` file (best known solution): its cost is 
 For Solomon instances, write the best known value in `config.yaml` (`best_known:`) and cite where it
 comes from in `docs/content/experimentation/instances.md`.
 
+## Real cities (RRNCO, road network)
+
+```
+data/
+  cities/
+    Paris_data.npz  Sao_Paulo_data.npz      RRNCO dataset, 1,000 real points per city
+```
+
+Download `dataset/<City>/<City>_data.npz` from
+[huggingface.co/datasets/ai4co/rrnco](https://huggingface.co/datasets/ai4co/rrnco) (16 MB each) and
+rename it `<City>_data.npz`. Source: Son et al., *RRNCO*, ICLR 2026. Each file has `points`
+(1000 x 2, lat, lon), `distance` (road km) and `duration` (free-flow minutes), both computed with
+OSRM on OpenStreetMap and **asymmetric** (one-way streets). Load with `cvrp.cities.load_city`,
+which adds the depot (road medoid), demands (1 to 10), capacity and optional time windows:
+
+```python
+from cvrp.cities import load_city
+inst = load_city("data/cities/Paris_data.npz", n=1000)                       # km, up to 999 customers
+inst = load_city("data/cities/Paris_data.npz", n=1000, metric="duration")    # minutes, for traffic mode
+```
+
+Lyon and Cairo are not in RRNCO. The file named `Alexandria` is Alessandria (Italy, 44.8 N
+8.7 E), not Alexandria (Egypt): do not use it as an Egyptian city. Paris (France) and São Paulo
+(congested megacity, also covered by the Uber speed data of the time-dependent benchmark of
+Blauth et al. 2022) are used instead.
+
 ## Conventions
 
 - CVRPLIB `EUC_2D` distances are **rounded to the nearest integer** (`round_euc2d=True`), which is
