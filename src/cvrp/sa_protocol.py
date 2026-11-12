@@ -30,7 +30,10 @@ def tuning_jobs(
     study, quick_check=False, *, seeds=None, time_limit=_STUDY_LIMIT, iterations=None
 ):
     """Use the reserved tuning grid, optionally overriding seeds and run budgets."""
-    limit = (1.0 if quick_check else study.TIME_LIMIT) if time_limit is _STUDY_LIMIT else time_limit
+    limit = (
+        (1.0 if quick_check else study.TIME_LIMIT)
+        if time_limit is _STUDY_LIMIT else time_limit
+    )
     jobs = study.tune_jobs(["sa"])
     if seeds is None:
         seeds = study.TUNE_SEEDS[:1] if quick_check else study.TUNE_SEEDS
@@ -43,9 +46,7 @@ def tuning_jobs(
             for seed in seeds
         ]
     budget = {} if iterations is None else {"iterations": iterations}
-    return [
-        (n, a, dict(p, time_limit=limit, **budget), s) for n, a, p, s in jobs
-    ]
+    return [(n, a, dict(p, time_limit=limit, **budget), s) for n, a, p, s in jobs]
 
 
 def choose_parameters(tuning):
@@ -66,7 +67,10 @@ def benchmark_jobs(
     """Run the other fifty instances, excluding the six parameter-selection cases."""
     if seeds is None:
         seeds = study.TEST_SEEDS[:2] if quick_check else study.TEST_SEEDS
-    limit = (1.0 if quick_check else study.TIME_LIMIT) if time_limit is _STUDY_LIMIT else time_limit
+    limit = (
+        (1.0 if quick_check else study.TIME_LIMIT)
+        if time_limit is _STUDY_LIMIT else time_limit
+    )
     names = (
         sorted(p.stem for p in study.DATA.glob("*.txt") if p.stem not in study.TUNING)
         if names is None
