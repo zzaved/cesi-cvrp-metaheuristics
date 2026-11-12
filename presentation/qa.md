@@ -142,3 +142,203 @@ need the graphs, which the RRNCO matrices do not include.
 No. GRASP-ILS reads its clock only between iterations and kicks; at 10 000 customers one iteration is
 longer than the budget. It is a defect of our implementation, fixed by checking the time inside the
 construction and the descent and returning the best partial plan completed by a greedy insertion.
+
+## How each algorithm is built (anyone may be asked any of these)
+
+The professor may ask any of us about any algorithm. These answers come from the code in
+`src/cvrp/` and are the same for the three of us.
+
+### Shared ground
+
+**What do the three algorithms have in common?**
+Same instance object (`Instance`), same encoding (a list of routes, depot implicit at both ends),
+same final check (`Solution.violations`: capacity, windows, every customer once), same wall clock
+budget, same machine. Each one keeps only feasible solutions: an infeasible route costs infinity,
+so it is never accepted.
+
+**What is a granular neighborhood?** (used by Tabu and GRASP-ILS)
+A move of customer c is only tried next to one of c's k nearest customers (Toth and Vigo, 2003).
+Good routes rarely connect far customers, so this cuts the neighborhood from O(n²) to O(n k)
+almost without losing quality. k = 15 for Tabu, 20 for GRASP-ILS (both checked in the
+sensitivity study).
+
+**Which moves exist?**
+- relocate: move one customer to another place.
+- swap: exchange two customers.
+- 2-opt: reverse a segment inside one route.
+- 2-opt*: exchange the tails of two routes. It is the move that can empty a route.
+- Or-opt: move a chain of 2 to 3 customers. GRASP-ILS uses it, and SA's chain relocate does the
+  same job.
+
+### Tabu Search (Pablo, `src/cvrp/tabu.py`)
+
+**How does one iteration work?**
+Sample 200 granular moves (relocate, swap, 2-opt*, 2-opt) around random customers and compute each
+delta. Only the two routes a move touches are re-evaluated, and their costs are cached. Then
+apply the best move that is not tabu, **even if it makes the plan worse**: accepting worse moves
+is how Tabu Search climbs out of a local optimum.
+
+**What is tabu, and for how long?**
+The customers a move touched: they cannot move again for a tenure drawn at random in
+[tenure / 2, 3 tenure / 2] iterations (tuned tenure 20, so 10 to 30). The random draw avoids
+cycles of a fixed length.
+
+**Aspiration criterion?**
+A tabu move is allowed if it gives a new best solution.
+
+**Initial solution?**
+The time oriented nearest neighbor (Solomon, 1987): extend the route with the closest customer
+that keeps it feasible, and open a new route when none fits.
+
+**Stopping rule?** The time limit. The best plan seen is returned.
+
+**Why a sampled candidate list instead of the full neighborhood?**
+With 1 000 customers the full neighborhood has millions of moves. 200 samples keep one iteration
+at about 1 to 2 ms at any n, which is why Tabu still works at 10 000 customers. The sensitivity
+study shows the trade off: 25 candidates make the step almost random (20 % gap), 800 make it
+14 times slower (7.9 %).
+
+**Its weakness?**
+The nearest neighbor start opens too many routes with windows, and relocate and swap rarely
+empty a route. At 1 000 customers it uses 171 trucks against 106.
+
+**How does it handle traffic?**
+Only the route cost changes: `duration_cost` simulates the route with the hourly factor ρ_h and
+returns arrival at the depot minus departure. The search itself does not change.
+
+### GRASP-ILS (Farida, `src/cvrp/grasp.py`)
+
+**What does GRASP stand for, and what is one iteration?**
+Greedy Randomized Adaptive Search Procedure (Feo and Resende, 1995). One iteration is a
+randomized greedy construction, a local search, then 90 kicks (the ILS part). The best feasible
+plan over all iterations is returned.
+
+**How does the construction work?**
+Parallel insertion. For each unrouted customer the cheapest feasible insertion over all open
+routes is kept up to date (only the route that changed is recomputed). The score is the
+**regret**: insertion cost minus (second best route minus best route), so customers with few good
+options are served first. The restricted candidate list (RCL) keeps the customers with
+score ≤ s_min + α (s_max − s_min), and one of them is drawn at random. α = 0 is pure greedy and
+α = 1 is pure random. Tuned α = 0.3. When no customer fits, a new route opens with a seed
+customer (far from the depot or with an early due date).
+
+**Why is it the best with time windows?**
+The regret construction already gives few trucks and a good order. Windows make that start
+decisive, and the descent cannot easily remove a truck later.
+
+**Local search?**
+Variable Neighborhood Descent with first improvement: relocate, then swap, 2-opt*, Or-opt and
+intra-route 2-opt, all granular. After an improvement it restarts from the first neighborhood.
+
+**How is feasibility checked so fast?**
+Each route stores its arrival times A (forward pass) and its latest feasible start times Z
+(backward pass, Savelsbergh 1992). A move is feasible if the new arrival at the next customer is
+at most its Z, so most moves are checked in O(1) without simulating the route again.
+
+**What is a kick?**
+Remove a cluster of 10 to 20 % of the customers (a random customer and its neighbors), reinsert
+them greedily (tight windows first), descend again, and keep the result only if it is better.
+Without kicks (plain GRASP) the gap doubles: 2.50 % against 1.34 %.
+
+**What if the construction uses more trucks than allowed?**
+`_eliminate_routes` empties the smallest routes and reinserts their customers.
+
+**Its weakness?**
+Time per iteration. One construction plus descent takes about 60 s at 2 000 customers, and more
+than 684 s at 10 000. The clock is read only between iterations and kicks (a defect, see above).
+
+### Simulated Annealing (Dag, `src/cvrp/sa_static.py`, `src/cvrp/sa_vrptw.py`)
+
+**How does one step work?**
+Pick two random routes and one of five moves: relocate a customer, relocate a chain of 2 to 3
+customers, swap, 2-opt inside a route, or 2-opt* between two routes (which can merge routes).
+Compute the delta on the two routes. An infeasible result is rejected. Otherwise accept if
+delta ≤ 0, or with probability exp(−delta / T) (Metropolis rule).
+
+**Cooling schedule?**
+Exponential in elapsed time: T(t) = T0 (Tf / T0)^(t / budget), with T0 = 0.01 × the cost of the
+initial plan and Tf = 0.005 (tuned). It reaches Tf exactly at the end of the budget, so the same
+schedule fits any time limit.
+
+**Initial solution?**
+Randomized cheapest feasible insertion: customers in random order, usually inserted at the best
+place, sometimes (10 %) among the 3 best for diversity.
+
+**Why is it compiled?**
+The move loop runs in Numba (`@njit`), in batches of 256 moves. Compilation is a warm-up outside
+the timer. That is why it makes about 16 million moves in 20 s at 1 000 customers.
+
+**Why is it the most robust?**
+Its gap stays between 0.55 and 0.83 % over a wide range of temperatures. It only breaks when T0
+goes to 0 (factor 0.0005, 2.13 %): then it accepts almost no worse move and becomes a plain
+descent.
+
+**Its weakness?**
+It needs a number of moves proportional to n. At 10 000 customers, 14 million moves are only
+1 400 per customer, so the cooling ends before the plan is good (84 % above the bound).
+
+### Questions that cross the three
+
+**Exploration versus exploitation in each one?**
+- Tabu Search: explores by accepting the best non-tabu move even if it is worse, and exploits
+  with the best move of the sample and aspiration.
+- SA: explores at high temperature and exploits at low temperature.
+- GRASP-ILS: explores with the random RCL and the kicks, and exploits with the descent.
+
+**Which one is deterministic?**
+None. All three use a seed, and the same seed gives the same result. That is why every result is
+a mean over seeds.
+
+**Why does SA accept worse moves at random, but Tabu Search does it deterministically?**
+SA draws the acceptance with exp(−delta / T). Tabu Search always takes the best allowed move, and
+its memory (the tabu list) prevents going back. These are two ways to leave a local optimum.
+
+**Which one would you combine, and how?**
+GRASP-ILS's regret construction as the start of Tabu Search. It would fix Tabu's truck problem
+with windows and keep its cheap iterations at large n. This is in the future work (section 10).
+
+## General project questions (anyone may be asked)
+
+**What problem do you solve, in one sentence?**
+A capacitated vehicle routing problem with time windows and hourly traffic (TDVRPTW), minimizing
+the total route duration of the fleet.
+
+**What is a feasible solution?**
+Every customer served exactly once, each route starts and ends at the depot, the load is at most
+Q, the service starts inside [a_i, b_i] (waiting is allowed), and there are at most K trucks.
+
+**Decision variables of the ILP?**
+x_ij^k ∈ {0,1}: truck k drives from i to j. y_ih ∈ {0,1}: customer i is left during hour h (and
+y_0h^k for the depot departure of truck k). t_i: service start at i, bounded by its window. t_0^k and
+t_{n+1}^k: departure from and return to the depot of truck k (the depot is split into nodes 0 and
+n + 1). Objective: Σ_k (t_{n+1}^k − t_0^k).
+
+**Why is the problem NP-hard, in simple words?**
+With one truck, no capacity limit and wide windows, it is already the travelling salesman
+problem, and that is NP-hard. Our problem contains it.
+
+**What is the gap, and against what?**
+(cost − reference) / reference. The reference is the best known value on Solomon and Homberger,
+the best plan over all our runs for the cities, and the radial lower bound at 10 000 customers.
+
+**Why 20 s per run?**
+It is the same budget for every algorithm, so the comparison is fair. 1 500 test runs fit in one
+night. Round 2 adds 60 s, 120 s and 300 s to measure the effect of time.
+
+**Tuning set and test set?**
+6 Solomon instances for tuning, and the 50 other instances for the test, never seen during
+tuning. This avoids overfitting the parameters.
+
+**What did each of you build?**
+- Pablo: the model, the complexity proof, the ILP and Tabu Search.
+- Dag: Simulated Annealing.
+- Farida: GRASP-ILS.
+- All three: the shared evaluator and protocol.
+
+**What would you do with more time?**
+- Real measured traffic speeds instead of the assumed ρ_h.
+- A test with routes that span several hours.
+- A GRASP-ILS clock inside the construction.
+- A regret start for Tabu Search.
+- Retuning with tenure 35 and α 0.7.
+- More seeds at 10 000 customers.
