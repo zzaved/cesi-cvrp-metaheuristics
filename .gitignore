@@ -28,6 +28,7 @@ results/*
 
 # Documentation site (Docusaurus)
 docs/node_modules/
+presentation/node_modules/
 docs/build/
 docs/.docusaurus/
 
