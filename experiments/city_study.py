@@ -20,6 +20,7 @@ Usage:
     python experiments/city_study.py run       # -> results/city_benchmark.csv
     python experiments/city_study.py metrics   # -> results/city_metrics.csv
     python experiments/city_study.py report
+    python experiments/city_study.py control   # -> results/city_control.csv
 """
 
 from __future__ import annotations
@@ -58,35 +59,38 @@ def instance(city: str, objective: str):
     return load_city(DATA / CITIES[city], n=None, metric=metric, seed=0)
 
 
-def solve(algo: str, inst, start: float | None, seed: int) -> tuple[list[list[int]], float, int]:
+def solve(
+    algo: str, inst, start: float | None, seed: int, limit: float = TIME_LIMIT, kicks: int = 90
+) -> tuple[list[list[int]], float, int]:
     """Run one algorithm with its tuned setting; return routes, reported cost, iterations."""
     if algo == "tabu":
         cost = distance_cost(inst) if start is None else duration_cost(inst, start_min=start)
-        p = TabuParams(tenure=20, candidates=200, k_near=15, time_limit=TIME_LIMIT)
+        p = TabuParams(tenure=20, candidates=200, k_near=15, time_limit=limit)
         r = tabu_search(inst, cost, p, seed)
         return r.routes, r.cost, r.iterations
     if algo == "grasp":
         p = GRASPParams(
             alpha=0.3,
             improvement="first",
-            perturb_kicks=90,
+            perturb_kicks=kicks,
             iterations=10**9,
-            time_limit=TIME_LIMIT,
+            time_limit=limit,
             objective="distance" if start is None else "duration",
             start_min=480.0 if start is None else start,
         )
         r = grasp(inst, p, seed=seed)
         return r.best.routes, r.cost, r.iterations
-    r = run_sa(inst, seed, TIME_LIMIT, initial_temperature_factor=0.005, final_temperature=0.005)
+    r = run_sa(inst, seed, limit, initial_temperature_factor=0.005, final_temperature=0.005)
     return r.best.routes, r.cost, r.iterations
 
 
-def run_one(job: tuple[str, str, str, int]) -> dict:
-    """One (city, objective, algorithm, seed) run, checked by an independent evaluation."""
-    city, objective, algo, seed = job
+def run_one(job: tuple) -> dict:
+    """One (city, objective, algorithm, seed[, limit, kicks]) run, checked independently."""
+    city, objective, algo, seed, *extra = job
+    limit, kicks = extra or (TIME_LIMIT, 90)
     inst = instance(city, objective)
     start = OBJECTIVES[objective]
-    routes, reported, iterations = solve(algo, inst, start, seed)
+    routes, reported, iterations = solve(algo, inst, start, seed, limit, kicks)
     routes = [list(map(int, r)) for r in routes if len(r)]
     sol = Solution(routes=routes)
     if start is None:
@@ -99,6 +103,8 @@ def run_one(job: tuple[str, str, str, int]) -> dict:
         "objective": objective,
         "algorithm": algo,
         "seed": seed,
+        "time_limit": limit,
+        "kicks": kicks if algo == "grasp" else None,
         "cost": round(checked, 3),
         "reported": round(reported, 3),
         "cost_matches": abs(checked - reported) <= 1e-6 * max(1.0, abs(checked)),
@@ -117,6 +123,22 @@ def jobs() -> list[tuple[str, str, str, int]]:
         for algo in ALGOS["distance" if objective == "distance" else "duration"]
         for seed in SEEDS
     ]
+
+
+def control_jobs() -> list[tuple]:
+    """Is GRASP-ILS limited by the budget or by the size? Distance objective, 3 seeds.
+
+    GRASP-ILS with fewer kicks at 60 s (more iterations), and GRASP-ILS and Tabu Search with
+    300 s (five times the budget).
+    """
+    seeds = SEEDS[:3]
+    short = [
+        (c, "distance", "grasp", s, 60.0, k) for c in CITIES for k in (0, 10, 30) for s in seeds
+    ]
+    long = [
+        (c, "distance", a, s, 300.0, 90) for c in CITIES for a in ("grasp", "tabu") for s in seeds
+    ]
+    return long + short
 
 
 def haversine_km(points: np.ndarray) -> np.ndarray:
@@ -184,13 +206,15 @@ if __name__ == "__main__":
     elif cmd == "report":
         report()
     else:
-        all_jobs = jobs()
+        control = cmd == "control"
+        all_jobs = control_jobs() if control else jobs()
+        out = RESULTS / ("city_control.csv" if control else "city_benchmark.csv")
         print(f"{len(all_jobs)} runs x {TIME_LIMIT:.0f} s on {WORKERS} workers", flush=True)
         rows = []
         with Pool(WORKERS) as pool:
             for i, row in enumerate(pool.imap_unordered(run_one, all_jobs), 1):
                 rows.append(row)
-                pd.DataFrame(rows).to_csv(RESULTS / "city_benchmark.csv", index=False)
+                pd.DataFrame(rows).to_csv(out, index=False)
                 print(
                     f"{i}/{len(all_jobs)} {row['city']} {row['objective']} {row['algorithm']}"
                     f" {row['cost']} ok={row['feasible'] and row['cost_matches']}",
