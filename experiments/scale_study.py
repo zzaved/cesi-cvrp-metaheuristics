@@ -15,6 +15,7 @@ Usage:
     python experiments/scale_study.py homberger   # -> results/scale_homberger.csv
     python experiments/scale_study.py synthetic   # -> results/scale_synthetic.csv
     python experiments/scale_study.py synthetic grasp   # one algorithm, rows appended
+    python experiments/scale_study.py sweep   # 1 000 to 5 000 uniform, 60 s -> scale_sweep.csv
 
 At 10 000 customers a solver that checks its clock only between iterations can overrun the budget
 by far; such a run is stopped at HARD_STOP times the budget and recorded as infeasible.
@@ -80,7 +81,7 @@ def solve(algo: str, inst: Instance, seed: int, limit: float):
 def run_one(job: tuple) -> dict:
     """One (instance, algorithm, seed, budget) run, checked by the shared evaluator."""
     name, algo, seed, limit = job
-    inst = synthetic() if name.startswith("U") else homberger_study.load(name)
+    inst = synthetic(int(name[1:])) if name.startswith("U") else homberger_study.load(name)
     started = time.perf_counter()
     try:
         routes, iterations = solve(algo, inst, seed, limit)
@@ -127,6 +128,14 @@ def synthetic_jobs(algos=ALGOS) -> list[tuple]:
     return [(f"U{SYNTHETIC_N}", a, 1, SYNTHETIC_LIMIT) for a in algos]
 
 
+SWEEP_N, SWEEP_LIMIT = (1_000, 2_000, 5_000), 60.0
+
+
+def sweep_jobs() -> list[tuple]:
+    """Uniform CVRP without windows from 1 000 to 5 000 customers: where each method stops."""
+    return [(f"U{n}", a, 1, SWEEP_LIMIT) for n in SWEEP_N for a in ALGOS]
+
+
 def run_guarded(job: tuple) -> dict:
     """run_one in its own process, stopped at HARD_STOP times the budget."""
     name, algo, seed, limit = job
@@ -137,7 +146,7 @@ def run_guarded(job: tuple) -> dict:
             pool.terminate()
     return {
         "instance": name,
-        "n": SYNTHETIC_N,
+        "n": int(name[1:]),
         "algorithm": algo,
         "seed": seed,
         "time_limit": limit,
@@ -163,7 +172,7 @@ if __name__ == "__main__":
         algos = sys.argv[2:] or ALGOS
         old = pd.read_csv(out) if out.exists() and sys.argv[2:] else pd.DataFrame()
         rows = old[~old.algorithm.isin(algos)].to_dict("records") if len(old) else []
-        all_jobs = synthetic_jobs(algos)
+        all_jobs = sweep_jobs() if cmd == "sweep" else synthetic_jobs(algos)
         results = map(run_guarded, all_jobs)
     print(f"{len(all_jobs)} runs -> {out.name}", flush=True)
     for i, row in enumerate(results, 1):
