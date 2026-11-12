@@ -80,6 +80,49 @@ mean time), **GRASP-ILS** is the chosen method. Caveat: SA is compiled (numba) a
 are pure Python, so equal time mixes the algorithm with its implementation; this favors SA, which
 still comes second.
 
+## Round 2: scale, real road networks, night (12 November 2026)
+
+Asked at the review of 10 November. Same machine, tuned settings, shared evaluator; section 9 of
+the final notebook. Commands: `python experiments/scale_study.py homberger`, `... synthetic`,
+`python experiments/city_study.py run`, `... control`, `python experiments/sensitivity.py <algo>`.
+
+**From 100 to 1 000 customers** (Homberger R1, time windows, mean gap to BKS over 3 seeds, %)
+
+| Customers, budget | GRASP-ILS | SA | Tabu Search |
+| --- | --- | --- | --- |
+| 400, 20 s | 3.67 | 5.16 | 15.37 |
+| 800, 20 s | 8.40 | 14.36 | 32.32 |
+| 1 000, 20 s | 9.91 | 21.75 | 37.33 |
+| 1 000, 120 s | 7.81 | 10.45 | 31.74 |
+
+*Interpretation:* GRASP-ILS leads at every size and budget; SA gains most from time (its gap halves
+from 20 to 120 s); Tabu Search's gap is mostly extra trucks (171 routes against 106 at 1 000).
+
+**10 000 customers** (uniform synthetic CVRP, 300 s, one run each)
+
+| Algorithm | Result | Trucks | Above the radial lower bound |
+| --- | --- | --- | --- |
+| Tabu Search | 502 257 | 553 (minimum) | 18.6 % |
+| SA | 779 401 | 774 | 84.0 % |
+| GRASP-ILS | no plan after 684 s (first iteration unfinished) | | |
+
+*Interpretation:* only Tabu Search scales to 10 000 customers within the budget, through its
+neighbor lists; GRASP-ILS's construction is its wall.
+
+**Real road networks** (999 customers, distance in km, mean of 5 seeds, 60 s)
+
+| City | GRASP-ILS | SA | Tabu Search |
+| --- | --- | --- | --- |
+| Paris | 360.9 | 420.7 | 334.9 |
+| São Paulo | 416.4 | 459.8 | 382.9 |
+
+*Interpretation:* without windows, Tabu Search wins in both countries (about 30 000 iterations in
+60 s against one for GRASP-ILS); the ranking is the same in Paris and São Paulo.
+
+**Night** (duration with hourly traffic, Tabu Search): leaving at 22:00 instead of 08:00 cuts the
+total duration from 1 831 to 1 014 min in Paris (44.6 %) and from 1 511 to 850 min in São Paulo
+(43.7 %).
+
 ## Exact approach (Pablo)
 
 `python experiments/exact_study.py`, HiGHS on one thread, 60 s per solve; details in section 4 of
