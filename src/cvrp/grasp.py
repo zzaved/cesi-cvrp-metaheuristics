@@ -59,6 +59,8 @@ from __future__ import annotations
 import math
 import random
 import time
+from array import array
+from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -96,6 +98,17 @@ class GRASPParams:
             for the Solomon benchmark) or ``"duration"`` (total route duration
             with hourly traffic, the team model of notebook 01).
         start_min: Depot departure in minutes after midnight (traffic mode only).
+        local_search: ``"vnd"`` (full VND passes over all customers, the setting of the
+            Solomon campaign) or ``"dlb"`` (localized descent with don't-look bits: after a
+            kick only the modified routes are re-examined, and the time limit is also checked
+            inside the descent). ``"dlb"`` is the large-instance setting (Homberger, cities,
+            10,000 customers).
+        kick_size: Fraction range of customers removed by one kick (distance mode).
+        kick_max: Upper bound on the customers removed by one kick (``None`` = no bound),
+            so that kicks stay local on large instances.
+        construction: also accepts ``"nearest"``: randomized nearest-neighbor route building
+            over the granular neighbor lists, O(n k), for instances too large for the
+            O(n^2) insertion heuristics (10,000 customers).
     """
 
     alpha: float = 0.1
@@ -110,6 +123,9 @@ class GRASPParams:
     time_limit: float | None = None
     objective: str = "distance"
     start_min: float = 480.0
+    local_search: str = "vnd"
+    kick_size: tuple[float, float] = (0.10, 0.20)
+    kick_max: int | None = None
 
 
 @dataclass
@@ -142,7 +158,12 @@ class _Model:
     def __init__(self, inst: Instance, n_neighbors: int) -> None:
         n = inst.n_customers
         self.n = n
-        self.D = inst.dist.tolist()
+        if n <= 2000:
+            self.D = inst.dist.tolist()
+        else:
+            # Large n: one typed array per row (8 bytes per entry instead of about 32 for
+            # a list of Python floats): 0.8 GB instead of 3.2 GB at 10,000 customers.
+            self.D = [array("d", row) for row in inst.dist]
         self.dem = inst.demands.tolist()
         self.Q = float(inst.capacity)
         self.K = inst.num_vehicles if inst.num_vehicles is not None else n
@@ -158,8 +179,20 @@ class _Model:
             self.s = [0.0] * (n + 1)
         # k nearest customers of each customer (depot excluded), by distance.
         k = min(n_neighbors, n - 1)
-        order = np.argsort(inst.dist[1:, 1:], axis=1)[:, 1 : k + 1] + 1
-        self.neigh = [[]] + [row.tolist() for row in order]
+        if n <= 2000:
+            order = np.argsort(inst.dist[1:, 1:], axis=1)[:, 1 : k + 1] + 1
+            self.neigh = [[]] + [row.tolist() for row in order]
+        else:
+            # Large n: partial sort per block of rows (O(n^2) instead of O(n^2 log n),
+            # and no n x n index matrix in memory).
+            self.neigh = [[]]
+            for lo in range(1, n + 1, 1000):
+                block = inst.dist[lo : min(n + 1, lo + 1000), 1:].copy()
+                block[np.arange(len(block)), np.arange(lo - 1, lo - 1 + len(block))] = np.inf
+                part = np.argpartition(block, k, axis=1)[:, :k]
+                vals = np.take_along_axis(block, part, axis=1)
+                part = np.take_along_axis(part, np.argsort(vals, axis=1), axis=1) + 1
+                self.neigh += [row.tolist() for row in part]
 
 
 # --------------------------------------------------------------------------- #
@@ -395,6 +428,68 @@ def construct(m: _Model, rng: random.Random, alpha: float, mode: str, tw_weight:
         for v in unrouted:  # adaptive part: only the modified route is re-evaluated
             cand[v][ri] = _best_insertion(m, r, v, tw_weight)
     return st
+
+
+def construct_nearest(m: _Model, rng: random.Random, alpha: float) -> _State:
+    """Randomized nearest-neighbor construction, O(n k) (large instances).
+
+    Each route starts at a random customer among the farthest unrouted ones, then
+    repeatedly appends a customer drawn from an RCL of the feasible unrouted neighbors of
+    the last customer (cost within ``alpha`` of the cheapest). When no neighbor fits, the
+    route is closed. The neighbor lists replace the O(n) scan of the insertion heuristics,
+    so 10,000 customers are built in about a second.
+    """
+    D, dem, Q, e, l, s = m.D, m.dem, m.Q, m.e, m.l, m.s
+    unrouted = bytearray([0] + [1] * m.n)
+    left = m.n
+    by_far = sorted(range(1, m.n + 1), key=lambda c: -D[0][c])
+    far_ptr = 0
+    routes: list[list[int]] = []
+    while left:
+        while not unrouted[by_far[far_ptr]]:
+            far_ptr += 1
+        pool = [c for c in by_far[far_ptr : far_ptr + 50] if unrouted[c]]
+        u = rng.choice(pool[: max(1, int(alpha * len(pool)) + 1)])
+        route, load = [u], dem[u]
+        t = max(e[u], e[0] + D[0][u])
+        unrouted[u] = 0
+        left -= 1
+        while True:
+            last = route[-1]
+            cands = []
+            for v in m.neigh[last]:
+                if not unrouted[v] or load + dem[v] > Q + EPS:
+                    continue
+                if m.tw:
+                    tv = max(e[v], t + s[last] + D[last][v])
+                    if tv > l[v] + EPS or tv + s[v] + D[v][0] > l[0] + EPS:
+                        continue
+                cands.append((D[last][v], v))
+            if not cands and load < 0.9 * Q:
+                # All neighbors are used: fall back to the nearest feasible unrouted customer.
+                Dl = D[last]
+                for v in range(1, m.n + 1):
+                    if not unrouted[v] or load + dem[v] > Q + EPS:
+                        continue
+                    if m.tw:
+                        tv = max(e[v], t + s[last] + Dl[v])
+                        if tv > l[v] + EPS or tv + s[v] + D[v][0] > l[0] + EPS:
+                            continue
+                    if not cands or Dl[v] < cands[0][0]:
+                        cands = [(Dl[v], v)]
+            if not cands:
+                break
+            lo = min(c for c, _ in cands)
+            hi = max(c for c, _ in cands)
+            v = rng.choice([v for c, v in cands if c <= lo + alpha * (hi - lo) + EPS])
+            if m.tw:
+                t = max(e[v], t + s[last] + D[last][v])
+            route.append(v)
+            load += dem[v]
+            unrouted[v] = 0
+            left -= 1
+        routes.append(route)
+    return _State(m, routes)
 
 
 # --------------------------------------------------------------------------- #
@@ -645,9 +740,14 @@ class _LocalSearch:
         p = st.routes[ru].path
         # Reverse p[i+1..j]: edges (u, p[i+1]), (p[j], p[j+1]) become (u, p[j]), (p[i+1], p[j+1]).
         un = p[i + 1]
+        # Asymmetric matrices (real road networks): reversing the segment also reverses its
+        # inner arcs, so add (backward - forward) length of p[i+1..j], kept as running sums.
+        fwd = bwd = 0.0
         for j in range(i + 2, len(p) - 1):
             w, wn = p[j], p[j + 1]
-            delta = D[u][w] + D[un][wn] - D[u][un] - D[w][wn]
+            fwd += D[p[j - 1]][w]
+            bwd += D[w][p[j - 1]]
+            delta = D[u][w] + D[un][wn] - D[u][un] - D[w][wn] + bwd - fwd
             if delta >= -EPS:
                 continue
             cust = p[1 : i + 1] + p[i + 1 : j + 1][::-1] + p[j + 1 : -1]
@@ -656,17 +756,62 @@ class _LocalSearch:
             yield (delta, "route1", (ru, cust))
 
     # ---------- apply ---------- #
-    def _apply(self, mv) -> None:
+    def _apply(self, mv) -> list[int]:
+        """Perform a move; return the customers of the routes it changed."""
         _, kind, args = mv
         st = self.st
         if kind == "route1":
             ri, cust = args
             st.set_route(ri, cust)
+            touched = list(cust)
         else:
             ra, ca, rb, cb = args
             st.set_route(ra, ca)
             st.set_route(rb, cb)
+            touched = ca + cb
         st.drop_empty()
+        return touched
+
+    # ---------- localized descent (don't-look bits) ---------- #
+    def run_local(self, active=None, deadline: float | None = None) -> int:
+        """Descent restricted to "active" customers (Bentley's don't-look bits).
+
+        A queue holds the customers worth re-examining. For the popped customer every
+        neighborhood is tried in VND order; after an improving move the customers of the
+        changed routes go back into the queue, otherwise the customer is dropped. Starting
+        from all customers this is a full descent; after a kick only the customers of the
+        modified routes are re-examined, which keeps one kick cheap on large instances.
+        """
+        n = self.m.n
+        start = list(range(1, n + 1)) if active is None else [u for u in active if u]
+        self.rng.shuffle(start)
+        queue = deque(start)
+        inq = bytearray(n + 1)
+        for u in start:
+            inq[u] = 1
+        first = self.p.improvement == "first"
+        moves = pops = 0
+        while queue and moves < self.p.max_local_rounds:
+            pops += 1
+            if deadline is not None and pops % 256 == 0 and time.perf_counter() > deadline:
+                break
+            u = queue.popleft()
+            inq[u] = 0
+            for op in self.ops:
+                if first:
+                    mv = next(op(u), None)
+                else:
+                    mv = min(op(u), key=lambda x: x[0], default=None)
+                if mv is None:
+                    continue
+                touched = self._apply(mv)
+                moves += 1
+                for v in touched:
+                    if not inq[v]:
+                        inq[v] = 1
+                        queue.append(v)
+                break
+        return moves
 
 
 # --------------------------------------------------------------------------- #
@@ -714,22 +859,47 @@ def _eliminate_routes(m: _Model, st: _State, rng: random.Random) -> None:
             break
 
 
-def _kick(m: _Model, st: _State, rng: random.Random) -> _State:
-    """Remove a cluster of 10-20 % of the customers and reinsert them greedily."""
-    new = _State(m, [r.customers() for r in st.routes])
-    k = max(3, int(rng.uniform(0.10, 0.20) * m.n))
+def _kick(
+    m: _Model,
+    st: _State,
+    rng: random.Random,
+    size: tuple[float, float] = (0.10, 0.20),
+    kmax: int | None = None,
+) -> tuple[_State, set[int]]:
+    """Remove a cluster of customers (``size`` fraction, at most ``kmax``) and reinsert them.
+
+    Returns the new state and the customers of every route the kick changed (all of them
+    if the kick failed and the old state is returned unchanged, so nothing is skipped).
+    """
+    k = max(3, int(rng.uniform(*size) * m.n))
+    if kmax is not None:
+        k = max(3, min(k, kmax))
     seed = rng.randint(1, m.n)
-    near = [seed, *m.neigh[seed]]
-    if len(near) < k:
-        near += rng.sample(range(1, m.n + 1), k)
-    removed = list(dict.fromkeys(near))[:k]
+    # Cluster = the seed plus its neighbors, grown through neighbors of neighbors if needed.
+    removed = [seed]
+    seen = {seed}
+    head = 0
+    while len(removed) < k and head < len(removed):
+        for v in m.neigh[removed[head]]:
+            if v not in seen:
+                seen.add(v)
+                removed.append(v)
+                if len(removed) >= k:
+                    break
+        head += 1
+    if len(removed) < k:
+        removed += [c for c in rng.sample(range(1, m.n + 1), min(m.n, 2 * k)) if c not in seen]
+        removed = removed[:k]
     rem = set(removed)
-    new.routes = [_Route([c for c in r.customers() if c not in rem], m) for r in new.routes]
-    new.drop_empty()
-    new.reindex_all()
+    before = {tuple(r.path) for r in st.routes}
+    new = _State(m, [[c for c in r.customers() if c not in rem] for r in st.routes])
     if not _reinsert(m, new, removed, rng):
-        return st
-    return new
+        return st, set()
+    touched: set[int] = set()
+    for r in new.routes:
+        if tuple(r.path) not in before:
+            touched.update(r.path[1:-1])
+    return new, touched
 
 
 # --------------------------------------------------------------------------- #
@@ -740,6 +910,7 @@ def grasp(
     params: GRASPParams | None = None,
     seed: int | None = 0,
     verbose: bool = False,
+    model: _Model | None = None,
 ) -> GRASPResult:
     """Run the GRASP and return the best feasible solution found.
 
@@ -749,6 +920,8 @@ def grasp(
         params: Parameters; defaults to ``GRASPParams()``.
         seed: Seed of the random generator (same seed, same result).
         verbose: Print one line per iteration.
+        model: Prebuilt ``_Model(inst, params.n_neighbors)`` to reuse between runs on the
+            same (large) instance; built here when ``None``.
 
     Returns:
         A :class:`GRASPResult`. Feasibility is checked with the shared
@@ -760,22 +933,37 @@ def grasp(
     if p.objective != "distance":
         raise ValueError(f"unknown objective {p.objective!r}")
     rng = random.Random(seed)
-    m = _Model(inst, p.n_neighbors)
+    m = model if model is not None else _Model(inst, p.n_neighbors)
     t0 = time.perf_counter()
     best_sol, best_cost = None, INF
     history: list[dict] = []
     it = 0
+    if p.local_search not in ("vnd", "dlb"):
+        raise ValueError(f"unknown local_search {p.local_search!r}")
+    dlb = p.local_search == "dlb"
+    deadline = None if p.time_limit is None else t0 + p.time_limit
+    kicks_done = 0
     for it in range(1, p.iterations + 1):
-        st = construct(m, rng, p.alpha, p.construction, p.tw_weight)
+        if p.construction == "nearest":
+            st = construct_nearest(m, rng, p.alpha)
+        else:
+            st = construct(m, rng, p.alpha, p.construction, p.tw_weight)
         c_constr = st.cost()
         if len(st.routes) > m.K:
             _eliminate_routes(m, st, rng)
-        _LocalSearch(m, st, rng, p).run()
+        if dlb:
+            _LocalSearch(m, st, rng, p).run_local(None, deadline)
+        else:
+            _LocalSearch(m, st, rng, p).run()
         for _ in range(p.perturb_kicks):
             if p.time_limit is not None and time.perf_counter() - t0 > p.time_limit:
                 break
-            cand = _kick(m, st, rng)
-            _LocalSearch(m, cand, rng, p).run()
+            cand, touched = _kick(m, st, rng, p.kick_size, p.kick_max)
+            if dlb:
+                _LocalSearch(m, cand, rng, p).run_local(touched, deadline)
+            else:
+                _LocalSearch(m, cand, rng, p).run()
+            kicks_done += 1
             if len(cand.routes) <= m.K and cand.cost() < st.cost() - EPS:
                 st = cand
         sol = st.to_solution()
@@ -792,6 +980,7 @@ def grasp(
                 "routes": len(sol),
                 "feasible": feasible,
                 "seconds": time.perf_counter() - t0,
+                "kicks": kicks_done,
             }
         )
         if verbose:
