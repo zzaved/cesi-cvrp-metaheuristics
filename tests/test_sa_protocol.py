@@ -101,3 +101,40 @@ def test_invalid_benchmark_records_are_rejected(problem):
         rows.loc[0, "gap"] = 10
     with pytest.raises(ValueError):
         validate_runs(rows, ["A", "B"], [1, 2])
+
+
+def test_single_seed_untimed_jobs_keep_tuning_and_test_separate():
+    study = fake_study()
+    budget = dict(seeds=(1,), time_limit=None, iterations=10_000_000)
+    tuning = tuning_jobs(study, **budget)
+    test = benchmark_jobs(study, {"final_temperature": 0.02}, **budget)
+    assert len(tuning) == 72 and len(test) == 50
+    assert {s for _, _, _, s in tuning + test} == {1}
+    assert {n for n, _, _, _ in tuning}.isdisjoint({n for n, _, _, _ in test})
+    assert all(p["time_limit"] is None for _, _, p, _ in tuning + test)
+    assert all(p["iterations"] == 10_000_000 for _, _, p, _ in tuning + test)
+
+
+def test_untimed_selection_returns_only_temperature_settings():
+    rows = pd.DataFrame([dict(
+        params="{'final_temperature': 0.02, 'time_limit': None, 'iterations': 1000}",
+        gap=1.0, feasible=True,
+    )])
+    chosen, _ = choose_parameters(rows)
+    assert chosen == {"final_temperature": 0.02}
+
+
+def test_untimed_validation_uses_completed_moves_instead_of_elapsed_time():
+    rows = campaign()
+    rows["seconds"] = 0.001
+    rows["params"] = "{'time_limit': None, 'iterations': 256}"
+    validate_runs(rows, ["A", "B"], [1, 2], time_limit=None, iterations=256)
+    with pytest.raises(ValueError, match="positive iteration budget"):
+        validate_runs(rows, ["A", "B"], [1, 2], time_limit=None)
+    rows.loc[0, "iterations"] = 255
+    with pytest.raises(ValueError, match="iteration budget"):
+        validate_runs(rows, ["A", "B"], [1, 2], time_limit=None, iterations=256)
+    rows.loc[0, "iterations"] = 256
+    rows.loc[0, "params"] = "{'time_limit': 20, 'iterations': 256}"
+    with pytest.raises(ValueError, match="disabled time limit"):
+        validate_runs(rows, ["A", "B"], [1, 2], time_limit=None, iterations=256)

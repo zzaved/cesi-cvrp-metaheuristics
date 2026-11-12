@@ -99,21 +99,45 @@ not fleet-first solutions: the supplied R101 reference has 20 routes and cost
 1637.7. This dataset-specific convention takes precedence over the generic exact
 Solomon convention above when reproducing this benchmark.
 
-The current SA notebook uses the team split: six tuning instances
-(C101, C201, R101, R201, RC101, RC201) with seeds 101-102, followed by the other
-50 instances with seeds 1-10. Twelve temperature settings give 144 tuning runs;
-the lowest mean tuning gap selects the setting for 500 test runs, all at a
-20-second nominal budget. All 56 supplied cases are used, with separate roles.
-Per-instance means, sample standard deviations, iteration counts and runtime are
-displayed in memory; no CSV files are exported. Prior 56-instance/seed-0-to-9 tables are not used as current test results.
+The SA notebook restores the original timed Solomon study: six tuning instances
+(C101, C201, R101, R201, RC101, RC201), seeds 101-102 and twelve temperature
+settings give 144 tuning runs. The selected setting is evaluated on the other
+50 instances with seeds 1-10, giving 500 test runs. All use 20 seconds. These
+already-executed outputs are restored from
+`notebooks/archive/SA_before_single_seed_2026-11-12.ipynb`, not rerun or fabricated.
+Means and sample standard deviations describe repeated seeds; class-level
+intervals describe variation across instances. No CSV files are exported automatically.
+
+The intervening one-seed, 10-million-move notebook is preserved in
+`notebooks/archive/SA_before_homberger_budgets_2026-11-12.ipynb`. Its budget differs
+from the timed campaigns, so its results must not be pooled with them.
+
+The Homberger extension uses `R1_4_1`, `R1_8_1` and `R1_10_1` with seeds 1-3 at
+20, 60 and 120 seconds: 27 runs. The `.vrp` files and matching `.sol` references
+are stored in `data/homberger/`; `sources.json` records provenance and hashes.
+Temperature parameters remain fixed at the setting selected by the original
+Solomon tuning. Since cooling follows elapsed time, changing the budget also
+changes cooling speed. Three seeds and one R1 instance per size support only a
+small, descriptive comparison, not a general scaling or significance claim.
+
+For Homberger, the notebook reports both gap to the feasible best-known reference
+(an upper bound) and excess over a justified lower bound. The latter is the maximum
+of the graph's MST cost and a capacity-aware depot-edge bound; it relaxes time
+windows and can be weak. New runs record elapsed time, process CPU time, proposed
+moves and batch-snapshot time to the final observed best. That observation is not
+proof of convergence. The separate 10,000-customer synthetic section remains
+untimed with seed 1 and ten million proposed moves.
 
 The public solver is `sa(inst, SAParams(...), seed)` in `src/cvrp/sa.py`, returning
 `SAResult(best, cost, runtime, iterations, history)` with a shared `Solution`.
 The low-level implementation is in `sa_vrptw.py` and `sa_static.py`;
 `experiments/sa_adapter.py` calls the same public solver as the notebook.
-Numba is a main dependency. Compilation is synthetic setup outside the measured
-budget; construction and search are inside it, and reported elapsed time includes
-final validation. SA counts proposed move attempts. The notebook runs SA only; elapsed time
+Numba is a main dependency. Compilation is synthetic setup outside measured
+runtime; reported elapsed time includes construction, search and final validation.
+SA counts proposed move attempts, including rejected and infeasible proposals.
+With `time_limit=None`, temperature follows move count until the iteration budget
+is complete. Numeric time limits cool according to elapsed time.
+The notebook runs SA only; elapsed time
 reflects both the search strategy and its compiled implementation.
 
 SA's default factor 0.005 and final temperature 0.02 remain exploratory heuristics.
