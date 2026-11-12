@@ -1,0 +1,43 @@
+{
+  "repository": "https://github.com/PyVRP/Instances",
+  "revision": "7474b068a8effa7f39448b241314b615c9271525",
+  "downloaded_on": "2026-11-10",
+  "sizes": [
+    400,
+    800,
+    1000
+  ],
+  "distance_convention": "floor1",
+  "files": [
+    {
+      "file": "R1_10_1.sol",
+      "source": "https://raw.githubusercontent.com/PyVRP/Instances/7474b068a8effa7f39448b241314b615c9271525/VRPTW/R1_10_1.sol",
+      "sha256": "a781f8c76ef0a6edce7d7bfb066df6cf8b0602e1ea3db98df2705a6165d682e8"
+    },
+    {
+      "file": "R1_10_1.vrp",
+      "source": "https://raw.githubusercontent.com/PyVRP/Instances/7474b068a8effa7f39448b241314b615c9271525/VRPTW/R1_10_1.vrp",
+      "sha256": "7c064a3a3bcf5c3d4e64a4dc32ad603ad84563cf2fce39d5bdbf73972b7fd84d"
+    },
+    {
+      "file": "R1_4_1.sol",
+      "source": "https://raw.githubusercontent.com/PyVRP/Instances/7474b068a8effa7f39448b241314b615c9271525/VRPTW/GH400/R1_4_1.sol",
+      "sha256": "09b7ede982d43960c8759c56bf3f643c78216f29e7b3a8a166fcbb4c1455d503"
+    },
+    {
+      "file": "R1_4_1.vrp",
+      "source": "https://raw.githubusercontent.com/PyVRP/Instances/7474b068a8effa7f39448b241314b615c9271525/VRPTW/GH400/R1_4_1.vrp",
+      "sha256": "c126593ac2e392a81afb4ef70a8264a7bc7a9ef95e71db0da4354df70329d261"
+    },
+    {
+      "file": "R1_8_1.sol",
+      "source": "https://raw.githubusercontent.com/PyVRP/Instances/7474b068a8effa7f39448b241314b615c9271525/VRPTW/GH800/R1_8_1.sol",
+      "sha256": "0965c1bd0e24fc03a40345d324c4acc99cb001bf7d134d73da00b23ae6a7e350"
+    },
+    {
+      "file": "R1_8_1.vrp",
+      "source": "https://raw.githubusercontent.com/PyVRP/Instances/7474b068a8effa7f39448b241314b615c9271525/VRPTW/GH800/R1_8_1.vrp",
+      "sha256": "02d007426ee10f5c71ed73e14e98058f0a3ce08761f4808632b958ac86cc2298"
+    }
+  ]
+}
