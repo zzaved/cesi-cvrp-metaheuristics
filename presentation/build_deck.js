@@ -9,7 +9,7 @@ const HERE = __dirname;
 const S = JSON.parse(fs.readFileSync(path.join(HERE, "data", "summary.json"), "utf8"));
 const IMG = (f) => path.join(HERE, "img", f);
 const has = (f) => fs.existsSync(IMG(f));
-const OUT = path.join(HERE, "cvrp_final_presentation.pptx");
+const OUT = path.join(HERE, process.env.STATIC ? "cvrp_final_presentation_static.pptx" : "cvrp_final_presentation.pptx");
 
 // ------------------------------------------------------------------ palette (Ink on Cream)
 const K = {
@@ -76,7 +76,8 @@ const pill = (slide, x, y, text, color) => {
 };
 const addGif = (slide, file, x, y, w, ratio, alt) => {
   if (!has(file)) { T(slide, `[${file} not rendered]`, { x, y, w, h: 0.5, color: K.verm }); return; }
-  slide.addImage({ path: IMG(file), x, y, w, h: w * ratio, altText: alt });
+  const still = process.env.STATIC && has(file.replace(".gif", ".png")) ? file.replace(".gif", ".png") : file;
+  slide.addImage({ path: IMG(still), x, y, w, h: w * ratio, altText: alt });
 };
 const content = (title, section) => {
   const s = pres.addSlide({ masterName: "CONTENT", sectionTitle: section });
