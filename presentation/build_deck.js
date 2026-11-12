@@ -101,6 +101,10 @@ const night = (c) => {
   return { day: d, night: n, cut: 100 * (1 - n / d) };
 };
 
+// best plan of all distance runs in a city (60 s means and 300 s control means; see summary.py)
+const bestAll = (c) => Math.min(...S.cities.costs.filter((r) => r.city === c && r.objective === "distance").map((r) => r.best),
+  ...S.cities.control.filter((r) => r.city === c).map((r) => r.best));
+
 // ================================================================== 1. title
 pres.addSection({ title: "Opening" });
 {
@@ -312,9 +316,9 @@ pres.addSection({ title: "Round 2" });
     ["Data", "Customers", "Windows", "Reference for quality", "Why"],
     ["Solomon (round 1)", "100", "yes", "best known", "tuning and statistics"],
     ["Homberger R1", "400 · 800 · 1 000", "yes", "best known", "how quality breaks with n"],
-    ["Synthetic uniform", "10 000", "no", "best run, MST bound", "the limit in time and memory"],
-    ["Paris (France)", "999 real", "no", "best run of 15", "road network, real asymmetry"],
-    ["São Paulo (Brazil)", "999 real", "no", "best run of 15", "second country, same protocol"],
+    ["Synthetic uniform", "1 000 to 10 000", "no", "best run, radial bound", "the limit in time and memory"],
+    ["Paris (France)", "999 real", "no", "best of all runs", "road network, real asymmetry"],
+    ["São Paulo (Brazil)", "999 real", "no", "best of all runs", "second country, same protocol"],
   ];
   s.addTable(rows.map((r, i) => r.map((c) => ({ text: c, options: {
     bold: i === 0, color: i === 0 ? K.white : K.navy, fill: { color: i === 0 ? K.navy : (i % 2 ? K.white : "F8F5EE") },
@@ -336,7 +340,7 @@ pres.addSection({ title: "Round 2" });
   mrow("pairs with A→B ≠ B→A", pct(m.Paris.asymmetric_pairs_pct, 0), pct(m.Sao_Paulo.asymmetric_pairs_pct, 0), 4.0);
   mrow("area covered", `${fmt(m.Paris.area_km2, 1)} km²`, `${fmt(m.Sao_Paulo.area_km2, 1)} km²`, 4.65);
   T(s, "Same area, same number of customers: differences come from the roads.", { x: 9.0, y: 5.4, w: 3.5, h: 0.9, fontSize: 12.5, italic: true, color: K.soft });
-  s.addNotes("Pablo. Why these data: Homberger keeps a best known value, so we still measure a gap while n grows. 10 000 customers has no published optimum, so we compare against the best run and a spanning tree lower bound. The cities give real road networks: the matrix is asymmetric (one way streets) in 97 to 99 % of the pairs, and roads are 1.5 to 1.65 times longer than straight lines. We planned Lyon and Cairo; the open RRNCO dataset gave us ready road matrices for Paris and Sao Paulo, so we kept France and replaced Egypt by Brazil, another emerging megacity with a different network. Same protocol.");
+  s.addNotes("Pablo. Why these data: Homberger keeps a best known value, so we still measure a gap while n grows. 10 000 customers has no published optimum, so we compare against the best run and the radial lower bound (each route costs at least twice its farthest customer's distance). The cities give real road networks: the matrix is asymmetric in 97 to 99 % of the pairs, and roads are 1.5 to 1.65 times longer than straight lines. We planned Lyon and Cairo; the open RRNCO dataset gave us ready road matrices for Paris and Sao Paulo, so we kept France and replaced Egypt by Brazil, another emerging megacity with a different network. Same protocol. Limit: we have the travel matrices, not the road graphs, so density, degree and one way share are not measured, and both cities use the same assumed traffic profile.");
 }
 
 // ================================================================== 11. scale chart
@@ -384,28 +388,37 @@ pres.addSection({ title: "Round 2" });
 
 // ================================================================== 13. 10 000 customers
 {
-  const s = content("At 10 000 customers the question becomes: who still answers?", "Round 2");
-  kicker(s, "The limit  |  uniform synthetic, 300 s, one run each");
-  const syn = S.synthetic || {};
-  ORDER.forEach((a, i) => {
-    const x = MX + i * 4.1, r = syn[a];
-    card(s, x, 1.6, 3.85, 3.6);
-    pill(s, x + 0.3, 1.85, ALG[a].name, ALG[a].color);
-    if (!r || !r.feasible) {
-      T(s, "no plan", { x: x + 0.3, y: 2.4, w: 3.3, h: 0.8, fontFace: "Cambria", fontSize: 38, bold: true, color: K.verm });
-      T(s, "stopped at 684 s, more than twice the budget", { x: x + 0.3, y: 3.2, w: 3.3, h: 0.35, fontSize: 13, color: K.soft });
-      T(s, "its first iteration (regret construction and descent) never ended: the clock is read only between iterations", { x: x + 0.3, y: 3.65, w: 3.3, h: 1.3, fontSize: 14 });
-      return;
-    }
-    T(s, r.vs_best <= 0.005 ? "best" : `+${pct(r.vs_best)}`, { x: x + 0.3, y: 2.4, w: 3.3, h: 0.8, fontFace: "Cambria", fontSize: 38, bold: true, color: ALG[a].color });
-    T(s, "against the best of the three", { x: x + 0.3, y: 3.2, w: 3.3, h: 0.35, fontSize: 13, color: K.soft });
-    T(s, `${fmt(r.cost)} total distance\n${fmt(r.routes)} trucks\n${fmt(r.iterations)} iterations`, { x: x + 0.3, y: 3.65, w: 3.3, h: 1.3, fontSize: 14 });
+  const s = content("From 1 000 to 10 000 customers: who still answers?", "Round 2");
+  kicker(s, "The limit  |  uniform, no windows  |  one run per size");
+  const sw = S.sweep || [];
+  const sizes = [...new Set(sw.map((r) => r.n))].sort((a, b) => a - b);
+  const at = (a, n) => sw.find((r) => r.algorithm === a && r.n === n);
+  const feas = ORDER.filter((a) => sizes.every((n) => at(a, n) && at(a, n).feasible));
+  const part = ORDER.filter((a) => !feas.includes(a));
+  const series = ORDER.map((a) => ({ name: ALG[a].name, labels: sizes.map((n) => fmt(n)),
+    values: sizes.map((n) => (at(a, n) && at(a, n).feasible ? at(a, n).vs_bound : null)) }));
+  s.addChart(pres.charts.LINE, series, {
+    x: MX, y: 1.5, w: 6.9, h: 4.9, chartColors: ORDER.map((a) => ALG[a].color), lineSize: 3, lineDataSymbol: "circle", lineDataSymbolSize: 9,
+    showTitle: true, title: "Above the radial lower bound (%), against customers", showLegend: true, legendPos: "b",
+    showValue: true, dataLabelPosition: "t", dataLabelFormatCode: "0", valAxisMinVal: 0, displayBlanksAs: "gap", ...chartText,
   });
-  if (syn.tabu) {
-    T(s, `Lower bound 2 Σ d₀ᵢ qᵢ / Q = ${fmt(syn.lower_bound)}: Tabu Search ends ${pct(syn.tabu.vs_bound)} above it with the minimum number of trucks; SA ends ${pct(syn.sa.vs_bound, 0)} above it. Tabu Search scales through its neighbor lists; SA needs time in proportion to n; GRASP-ILS's construction, its strength up to 1 000, is its wall at 10 000.`,
-      { x: MX, y: 5.4, w: 12.1, h: 1.1, fontSize: 14, bold: true });
-  }
-  s.addNotes("Pablo. 10 000 customers, 10 000 by 10 000 distance matrix, 800 MB per run, so the runs were made one at a time on our 8 GB laptop. Tabu Search needed an array matrix and block neighbor lists to fit (commit of 10 November). Comment the result: which one finished, how many iterations, and what that says about time per iteration growing with n.");
+  const g = (n) => at("grasp", n), t = (n) => at("tabu", n), sa = (n) => at("sa", n);
+  const big = sizes[sizes.length - 1];
+  const rows = [
+    ["grasp", g(big) && !g(big).feasible ? "no plan at 10 000" : "",
+      `Budget 60 s. One iteration takes it all: ${fmt(g(2000).seconds)} s at 2\u00a0000, ${fmt(g(5000).seconds)} s at 5\u00a0000, more than 684 s at 10\u00a0000 (budget 300 s).`],
+    ["tabu", `${pct(t(big).vs_bound)} at 10 000`,
+      `Time per iteration barely grows: ${t(1000).ms_per_iteration.toFixed(1)} ms at 1\u00a0000, ${t(big).ms_per_iteration.toFixed(1)} ms at 10\u00a0000, thanks to its neighbor lists.`],
+    ["sa", `${pct(sa(big).vs_bound, 0)} at 10 000`,
+      `Moves per second fall with n (${fmt(sa(1000).iterations / 60 / 1e6, 1)} million/s at 1\u00a0000, ${fmt(sa(5000).iterations / 60 / 1e6, 2)} at 5\u00a0000) and its cooling ends too early.`],
+  ];
+  rows.forEach(([a, head, body], i) => {
+    const y = 1.55 + i * 1.65;
+    card(s, 7.8, y, 4.9, 1.45);
+    pill(s, 8.0, y + 0.2, `${ALG[a].name}${head ? ":  " + head : ""}`, ALG[a].color);
+    T(s, body, { x: 8.0, y: y + 0.58, w: 4.5, h: 0.85, fontSize: 12.5, color: K.soft });
+  });
+  s.addNotes(`Pablo. Bound: a route costs at least twice its farthest customer's distance, and its load is at most Q, so the plan costs at least 2 sum d0i qi / Q. Read the chart left to right: at 1 000 customers without windows GRASP-ILS and Tabu Search are equal (46 %); from 2 000 on Tabu Search pulls ahead and the gap to the bound closes as n grows. GRASP-ILS finishes one iteration only: 60 s at 2 000, 125 s at 5 000, and at 10 000 it ran 684 s on a 300 s budget without finishing, so we stopped it. That overrun is a defect of our code: it reads the clock only between iterations. SA needs time in proportion to n. 10 000 by 10 000 matrix: 800 MB per run, so these runs were made one at a time on an 8 GB laptop; one seed each, orders of magnitude.`);
 }
 
 // ================================================================== 14. real cities
@@ -420,9 +433,9 @@ pres.addSection({ title: "Round 2" });
   });
   const ctl = (c, a, t, k) => S.cities.control.find((r) => r.city === c && r.algorithm === a && r.time_limit === t && (k === undefined || r.kicks === k));
   const why = [
-    ["No windows, so construction matters less", "Capacity alone: every truck can take any customer. What counts is how many improving moves are made: Tabu makes about 30 000 iterations, GRASP-ILS one."],
+    ["No windows, so construction matters less", "Capacity alone: every truck can take any customer. What counts is how many improving moves are made: Tabu makes about 30 000 iterations in 60 s, GRASP-ILS one."],
     ["GRASP-ILS never reaches its kicks", `With 0, 10 or 30 kicks the result is identical (${fmt(ctl("Paris", "grasp", 60, 0).mean, 1)} km in Paris): the first descent fills the 60 s.`],
-    ["Five times the time does not change the order", `300 s: Tabu ${fmt(ctl("Paris", "tabu", 300).mean, 0)} km, GRASP-ILS ${fmt(ctl("Paris", "grasp", 300, 90).mean, 0)} km in Paris; São Paulo GRASP-ILS unchanged.`],
+    ["Five times the time does not change the order", `300 s: Tabu ${fmt(ctl("Paris", "tabu", 300).mean, 0)} km, GRASP-ILS ${fmt(ctl("Paris", "grasp", 300, 90).mean, 0)} km in Paris. Tabu at 60 s is ${pct(100 * (city("Paris", "distance", "tabu").mean / ctl("Paris", "tabu", 300).mean - 1))} above its own 300 s plan.`],
   ];
   why.forEach(([h, b], i) => {
     const y = 1.55 + i * 1.65;
@@ -436,7 +449,7 @@ pres.addSection({ title: "Round 2" });
 // ================================================================== 15. night
 {
   const p = night("Paris"), sp = night("Sao_Paulo");
-  const s = content(`At night the same deliveries take ${fmt(p.cut)} % less time`, "Round 2");
+  const s = content(`At night the same deliveries take ${fmt(p.cut, 1)} % less time: that is the traffic factor`, "Round 2");
   kicker(s, "The night  |  leave at 08:00 or 22:00  |  Tabu Search");
   addGif(s, "paris_day_night.gif", MX, 1.4, 8.4, 6.2 / 13.5, "Animation of trucks in Paris leaving at 08:00 and at 22:00, with a clock and the number of trucks back");
   T(s, "Straight segments join consecutive stops; travel times are road network times times ρ(h).", { x: MX, y: 5.35, w: 8.4, h: 0.35, fontSize: 11.5, italic: true, color: K.soft });
@@ -444,12 +457,12 @@ pres.addSection({ title: "Round 2" });
     const y = 1.55 + i * 2.0;
     card(s, 9.3, y, 3.4, 1.8);
     T(s, c, { x: 9.5, y: y + 0.15, w: 3.0, h: 0.35, fontSize: 15, bold: true });
-    T(s, `−${fmt(v.cut)} %`, { x: 9.5, y: y + 0.5, w: 3.0, h: 0.7, fontFace: "Cambria", fontSize: 36, bold: true, color: K.cobalt });
+    T(s, `−${fmt(v.cut, 1)} %`, { x: 9.5, y: y + 0.5, w: 3.0, h: 0.7, fontFace: "Cambria", fontSize: 36, bold: true, color: K.cobalt });
     T(s, `${fmt(v.day)} min at 08:00 → ${fmt(v.night)} min at 22:00`, { x: 9.5, y: y + 1.2, w: 3.0, h: 0.5, fontSize: 12.5, color: K.soft });
   });
-  T(s, "At night ρ = 1: the traffic term vanishes, the model becomes the free flow problem, and the algorithms rank the same. The gain is the traffic itself.",
-    { x: MX, y: 5.8, w: 12.1, h: 0.7, fontSize: 14, bold: true });
-  s.addNotes("Night, answered with numbers: same customers, same algorithm, the fleet leaves at 22:00 instead of 08:00. Routes that cross midnight are handled because the traffic profile repeats every 24 h. The reduction is close to the ratio of the morning traffic factor (1.75 to 1.80) because most trips happen in the peak. Caveat: our profile is assumed, not measured, and night deliveries have other costs (noise, staff), which the model does not price.");
+  T(s, "1 − 1/ρ(8) = 1 − 1/1.80 = 44.4 %. Routes last 32 min on average: only 1 of 57 changes hour, none crosses midnight. The night measures the size of the traffic effect; a test where the order of visits must change needs routes spanning several hours.",
+    { x: MX, y: 5.75, w: 12.1, h: 0.8, fontSize: 13.5, bold: true });
+  s.addNotes("Night, answered with numbers: same customers, same algorithm, the fleet leaves at 22:00 instead of 08:00. Routes that cross midnight are handled because the traffic profile repeats every 24 h. Say it before they do: the saving is the traffic factor of 8:00 (1.80), because the routes are short and stay inside one hour. The algorithms do not plan differently at night; they rank the same. Caveat: our profile is assumed, not measured, and night deliveries have other costs (noise, staff), which the model does not price.");
 }
 
 // ================================================================== 16. sensitivity
@@ -471,7 +484,7 @@ pres.addSection({ title: "Round 2" });
     T(s, `Tabu Search is the most fragile: 25 candidates ${pct(sv("tabu", "candidates", 25).mean_gap)}, 800 ${pct(sv("tabu", "candidates", 800).mean_gap)}, tuned 200 ${pct(sv("tabu", "candidates", 200).mean_gap)}. GRASP-ILS without kicks doubles its gap (${pct(sv("grasp", "perturb_kicks", 0).mean_gap)} against ${pct(sv("grasp", "perturb_kicks", 90).mean_gap)}). SA is flat from 0.001 to 0.05 and breaks only near T₀ = 0 (${pct(sv("sa", "initial_temperature_factor", 0.0005).mean_gap)}): it becomes a descent.`,
       { x: MX, y: 5.55, w: 12.1, h: 0.95, fontSize: 13.5, bold: true });
   }
-  s.addNotes("Mean gap on the tuning set, one parameter moved at a time around the tuned value, others fixed. Tabu: too few candidates (25) gives 20 % because the step is nearly random; too many (800) gives 8 % because each iteration is 30 times slower. GRASP-ILS: kicks are what make it better than plain GRASP; also, the tuned alpha 0.3 is not the best on these runs (alpha 0.7 to 1.0 gives 1.02 %), a more random start helps at 100 customers. SA: robust, gap between 0.54 and 0.83 % over two orders of magnitude of temperature. Every author explains their own curve.");
+  s.addNotes("Mean gap on the tuning set, one parameter moved at a time around the tuned value, others fixed. Tabu: too few candidates (25) gives 20 % because the step is nearly random; too many (800) gives 8 % because each iteration is 14 times slower than with 25. GRASP-ILS: kicks are what make it better than plain GRASP; also, the tuned alpha 0.3 is not the best on these runs (alpha 0.7 to 1.0 gives 1.02 %), a more random start helps at 100 customers. SA: robust, gap between 0.54 and 0.83 % over two orders of magnitude of temperature. Every author explains their own curve.");
 }
 
 // ================================================================== 17. recommendation
@@ -483,15 +496,16 @@ pres.addSection({ title: "Recommendation" });
     ["About 100 customers, time windows", "grasp", `${pct(sol.grasp.mean, 2)} mean gap, best known on ${fmt(sol.grasp.at_bks)} of 500 runs; significantly ahead of SA and Tabu Search`],
     ["One bad run is not acceptable (100 customers)", "sa", `worst run ${pct(sol.sa.worst)}, every run within 7 %; slightly ahead on wide windows (RC2)`],
     ["400 to 1 000 customers, time windows", "grasp", `lowest gap at every size and budget; within 7 % up to 800 customers with 120 s (${pct(hom("grasp", 800, 120).gap)})`],
-    ["About 1 000 customers on a real road network, no windows", "tabu", `1 to 2 % from the best run in Paris and São Paulo, against 9 to 10 % for GRASP-ILS: about 30 000 iterations against 1`],
-    ["10 000 customers", "tabu", `the only good plan: ${S.synthetic.tabu ? pct(S.synthetic.tabu.vs_bound) : "n/a"} above a lower bound, minimum trucks; GRASP-ILS returns nothing`],
-    ["Peak or night departure", "tabu", `the ranking does not change with the hour; leaving at 22:00 cuts the duration by ${fmt(night("Sao_Paulo").cut)} to ${fmt(night("Paris").cut)} %`],
+    ["About 1 000 customers on a real road network, no windows", "tabu", `${pct(100 * (city("Paris", "distance", "tabu").mean / bestAll("Paris") - 1), 0)} to ${pct(100 * (city("Sao_Paulo", "distance", "tabu").mean / bestAll("Sao_Paulo") - 1), 0)} from the best plan found, against ${pct(100 * (city("Paris", "distance", "grasp").mean / bestAll("Paris") - 1), 0)} to ${pct(100 * (city("Sao_Paulo", "distance", "grasp").mean / bestAll("Sao_Paulo") - 1), 0)} for GRASP-ILS: 30 000 iterations against 1`],
+    ["10 000 customers, no windows", "tabu", `the only good plan: ${S.synthetic.tabu ? pct(S.synthetic.tabu.vs_bound) : "n/a"} above a lower bound, minimum trucks; GRASP-ILS returns nothing`],
+    ["Peak or night departure", "tabu", `as without traffic: the ranking does not change with the hour; the ${fmt(night("Paris").cut, 1)} % night saving is the traffic factor`],
   ];
   const rows = [["Scenario", "Choose", "Because (our data)"]].concat(rec.map((r) => [r[0], ALG[r[1]].name, r[2]]));
   s.addTable(rows.map((r, i) => r.map((c, j) => ({ text: c, options: { fontSize: 13, fontFace: "Calibri", valign: "middle",
     bold: i === 0 || j === 1, color: i === 0 ? K.white : (j === 1 ? ALG[rec[i - 1][1]].color : K.navy),
     fill: { color: i === 0 ? K.navy : (i % 2 ? K.white : "F8F5EE") } } }))),
   { x: MX, y: 1.5, w: 12.1, colW: [3.6, 2.1, 6.4], rowH: 0.68, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
+  T(s, "Caveat: windows were tested up to 1 000 customers, no windows from 1 000 to 10 000; we did not test 10 000 customers with windows.", { x: MX, y: 6.35, w: 12.1, h: 0.4, fontSize: 12.5, italic: true, color: K.soft });
   s.addNotes("Each line is backed by a slide we showed. The rule of thumb: time windows make the construction decisive (GRASP-ILS); without windows on large real networks the number of improving moves per second decides (Tabu Search); when the budget is long and the code compiled, SA catches up.");
 }
 
@@ -505,7 +519,7 @@ pres.addSection({ title: "Recommendation" });
     ["France against Brazil, not Egypt", "Open road matrices existed for Paris and São Paulo; Cairo needs an OSM extraction we did not validate in time."],
     ["One departure time per fleet", "The model lets each truck choose its departure; the metaheuristics fix one. A 1-D search per route would close the gap."],
     ["First in, first out", "A later departure can arrive earlier when the hour changes; cutting trips at the hour removes it."],
-    ["No reference with traffic", "Best known values exist only for distance; with traffic we compare against the ILP up to 8 customers."],
+    ["Our solver overran its budget", "GRASP-ILS reads its clock only between iterations: 684 s on a 300 s budget at 10 000. A defect of our code, fixed by checking time inside the construction."],
   ];
   lim.forEach(([h, b], i) => {
     const x = MX + (i % 2) * 6.15, y = 1.55 + Math.floor(i / 2) * 1.65;
@@ -520,12 +534,12 @@ pres.addSection({ title: "Recommendation" });
 {
   const s = pres.addSlide({ masterName: "DARK", sectionTitle: "Recommendation" });
   T(s, "IN ONE SLIDE", { x: MX, y: 0.6, w: 6, h: 0.3, fontSize: 12, bold: true, color: "AEB8E6", charSpacing: 3 });
-  T(s, "A one component model that sees the clock, three metaheuristics measured to their limit, and a choice for every scenario",
+  T(s, "A one component model that sees the clock, three metaheuristics measured to their limit, and a choice for each scenario",
     { x: MX, y: 1.0, w: 12, h: 1.5, fontFace: "Cambria", fontSize: 30, bold: true, color: K.white });
   const big = [
     [pct(sol.grasp.mean, 2), "GRASP-ILS mean gap on 500 Solomon runs, chosen method"],
     [pct(hom("grasp", 1000, 120).gap), "GRASP-ILS at 1 000 customers with time windows, 120 s"],
-    [`−${fmt(night("Paris").cut)} %`, "route duration in Paris when the fleet leaves at 22:00"],
+    [pct(S.synthetic.tabu.vs_bound), "Tabu Search above a lower bound at 10 000 customers, the only method that scales"],
   ];
   big.forEach(([b, l], i) => {
     const x = MX + i * 4.1;

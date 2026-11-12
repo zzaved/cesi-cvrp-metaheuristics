@@ -110,13 +110,40 @@ def synthetic() -> dict:
     }
 
 
+def sweep() -> list:
+    """Uniform, no windows, 1 000 to 10 000 customers: gap to the radial bound, time per step."""
+    import scale_study
+
+    f = RES / "scale_sweep.csv"
+    if not f.exists():
+        return []
+    d = pd.concat([pd.read_csv(f), pd.read_csv(RES / "scale_synthetic.csv")], ignore_index=True)
+    bound = {}
+    for n in d.n.unique():
+        inst = scale_study.synthetic(int(n))
+        bound[n] = 2 * float((inst.dist[0, 1:] * inst.demands[1:]).sum()) / inst.capacity
+    d["vs_bound"] = 100 * (d.cost / d.n.map(bound) - 1)
+    d["ms_per_iteration"] = 1000 * d.seconds / d.iterations.where(d.iterations > 0)
+    cols = ["n", "algorithm", "time_limit", "feasible", "seconds", "iterations", "routes"]
+    return [
+        {
+            **{k: row[k] for k in cols},
+            "vs_bound": r(row.vs_bound),
+            "ms_per_iteration": r(row.ms_per_iteration, 3),
+        }
+        for _, row in d.iterrows()
+    ]
+
+
 def cities() -> dict:
     """Real cities: costs, network metrics and the control runs."""
     c = pd.read_csv(RES / "city_benchmark.csv")
-    g = c.groupby(["city", "objective", "algorithm"]).cost.agg(["mean", "std"])
+    g = c.groupby(["city", "objective", "algorithm"]).cost.agg(["mean", "std", "min"])
     m = pd.read_csv(RES / "city_metrics.csv").set_index("city")
     ctl = pd.read_csv(RES / "city_control.csv")
-    ctl = ctl.groupby(["city", "algorithm", "time_limit", "kicks"], dropna=False).cost.mean()
+    ctl = ctl.groupby(["city", "algorithm", "time_limit", "kicks"], dropna=False).cost.agg(
+        ["mean", "min"]
+    )
     return {
         "costs": [
             {
@@ -124,6 +151,7 @@ def cities() -> dict:
                 "objective": k[1],
                 "algorithm": k[2],
                 "mean": r(v["mean"]),
+                "best": r(v["min"]),
                 "std": r(v["std"]),
             }
             for k, v in g.iterrows()
@@ -135,9 +163,10 @@ def cities() -> dict:
                 "algorithm": k[1],
                 "time_limit": k[2],
                 "kicks": None if pd.isna(k[3]) else int(k[3]),
-                "mean": r(v),
+                "mean": r(v["mean"]),
+                "best": r(v["min"]),
             }
-            for k, v in ctl.items()
+            for k, v in ctl.iterrows()
         ],
     }
 
@@ -178,6 +207,7 @@ if __name__ == "__main__":
         "solomon": solomon(),
         "homberger": homberger(),
         "synthetic": synthetic(),
+        "sweep": sweep(),
         "cities": cities(),
         "sensitivity": sensitivity(),
         "exact": exact(),

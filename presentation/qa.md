@@ -55,7 +55,8 @@ No, it depends on the scenario, and that is our recommendation (slide 17). With 
 construction decides, and GRASP-ILS's regret insertion is the best start (it leads at every size up
 to 1 000). Without windows on 999 real customers, what decides is the number of improving moves
 per second: Tabu makes about 30 000 iterations in 60 s, GRASP-ILS one, and the control run shows
-its kicks never start (0, 10 and 30 kicks give the same cost).
+its kicks never start (0, 10 and 30 kicks give the same cost). Against the best plan found (Tabu,
+300 s), Tabu at 60 s is 6 to 7 % above, GRASP-ILS 15 to 17 %, SA 29 to 34 %.
 
 **Is the comparison fair? SA is compiled.**
 Not perfectly, and we say it. Same machine, same evaluator, same wall clock budget, interleaved
@@ -89,12 +90,17 @@ trips at a higher mean speed, which raises every cost but does not change which 
 
 **What happens at night?**
 Same customers, same algorithm, departure at 22:00 instead of 08:00: the total duration drops by
-about 45 % in Paris and 44 % in São Paulo, because ρ = 1 at night. The algorithms rank the same
-(Tabu ahead of GRASP-ILS at both hours). Routes crossing midnight are handled (ρ repeats every 24 h).
+44 % in both cities. We say it first: that is 1 − 1/ρ(8) = 1 − 1/1.80. The routes last 32 min on
+average, only 1 of 57 changes hour and none crosses midnight, so every trip is priced at one ρ. The
+night measures the size of the traffic effect; the algorithms do not plan differently and rank the
+same. A test where the order of visits must change needs routes spanning several hours (service
+times and windows over a day); the model and the solvers support it, this experiment does not
+exercise it.
 
 **Without a best known value, how do you measure quality?**
-Gap to the best run of all algorithms and seeds, and a minimum spanning tree lower bound for the
-10 000 customer instance. Never against the initial solution.
+Gap to the best plan of all runs (all algorithms, seeds and budgets), and the radial lower bound
+2 Σ d_0i q_i / Q for the 10 000 customer instance: a route costs at least twice its farthest
+customer's distance, and its load is at most Q. Never against the initial solution.
 
 ## Statistics
 
@@ -105,3 +111,34 @@ Holm corrects for three comparisons.
 **How many seeds?**
 10 on Solomon, 3 on Homberger and sensitivity, 5 on cities, 1 at 10 000 customers (memory: 800 MB
 per run on an 8 GB laptop, so one run at a time).
+
+## Questions raised by our own strict review
+
+**Your 300 s runs beat your best run. What are the real gaps in Paris?**
+Against the best of all runs (Tabu, 300 s, 314.8 km): Tabu at 60 s 6.4 %, GRASP-ILS 14.7 %, SA
+33.6 %; São Paulo 7.3 %, 16.7 %, 28.9 %.
+
+**Where exactly does GRASP-ILS stop returning a plan?**
+Without windows, budget 60 s: it finishes one iteration in 60 s at 1 000 and 2 000 customers, in
+125 s at 5 000 (twice the budget), and had not finished after 684 s at 10 000. So it stops meeting
+its budget between 2 000 and 5 000, and stops returning a plan at all between 5 000 and 10 000. Its
+iteration time grows faster than n². Tabu Search: 0.7 ms per iteration at 1 000, 2.1 ms at 10 000.
+
+**The sensitivity shows tenure 35 and α 0.7 are better. Why not retune?**
+The test campaign was fixed with the tuned values before the study. The gains (0.6 and 0.3 points
+on the tuning set) would not change the ranking of section 8: GRASP-ILS would gain, Tabu Search
+would stay third. Retuning means rerunning the 1 500 test runs; it is in section 10.
+
+**Tabu wins at 10 000 without windows. Would it win at 10 000 with windows?**
+Not tested, and we say so. With windows it already fails on trucks at 1 000 (171 against 106), so we
+would expect GRASP-ILS's construction to matter, if it can be made to finish (compiled).
+
+**Same ρ in Paris and São Paulo: what is country specific?**
+Only the road network geometry (trip length, circuity, asymmetry). The traffic profile is the same
+assumption in both, so no traffic conclusion is country specific. Density, degree and one way share
+need the graphs, which the RRNCO matrices do not include.
+
+**Your solver ran 684 s on a 300 s budget. Acceptable?**
+No. GRASP-ILS reads its clock only between iterations and kicks; at 10 000 customers one iteration is
+longer than the budget. It is a defect of our implementation, fixed by checking the time inside the
+construction and the descent and returning the best partial plan completed by a greedy insertion.
