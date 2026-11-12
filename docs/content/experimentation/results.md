@@ -107,7 +107,9 @@ from 20 to 120 s); Tabu Search's gap is mostly extra trucks (171 routes against 
 | GRASP-ILS | no plan after 684 s (first iteration unfinished) | | |
 
 *Interpretation:* only Tabu Search scales to 10 000 customers within the budget, through its
-neighbor lists; GRASP-ILS's construction is its wall.
+neighbor lists. A sweep at 1 000, 2 000 and 5 000 customers (60 s, `scale_study.py sweep`) places
+the limit of GRASP-ILS: one iteration takes 60 s at 2 000 and 125 s at 5 000 (twice the budget);
+Tabu Search goes from 0.7 to 2.1 ms per iteration between 1 000 and 10 000 customers.
 
 **Real road networks** (999 customers, distance in km, mean of 5 seeds, 60 s)
 
@@ -117,11 +119,14 @@ neighbor lists; GRASP-ILS's construction is its wall.
 | São Paulo | 416.4 | 459.8 | 382.9 |
 
 *Interpretation:* without windows, Tabu Search wins in both countries (about 30 000 iterations in
-60 s against one for GRASP-ILS); the ranking is the same in Paris and São Paulo.
+60 s against one for GRASP-ILS); the ranking is the same in Paris and São Paulo. Against the best
+plan of all runs (Tabu Search, 300 s) the 60 s means are 6 to 7 % above for Tabu Search, 15 to 17 %
+for GRASP-ILS.
 
 **Night** (duration with hourly traffic, Tabu Search): leaving at 22:00 instead of 08:00 cuts the
 total duration from 1 831 to 1 014 min in Paris (44.6 %) and from 1 511 to 850 min in São Paulo
-(43.7 %).
+(43.7 %). This is the traffic factor of 8:00 (1 − 1/1.80 = 44.4 %): routes are short, only 1 of 57
+changes hour, so the experiment measures the size of the traffic effect, not a change of plan.
 
 ## Exact approach (Pablo)
 
