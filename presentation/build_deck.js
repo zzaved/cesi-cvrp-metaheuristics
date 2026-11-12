@@ -490,7 +490,7 @@ pres.addSection({ title: "Round 2" });
 // ================================================================== 17. recommendation
 pres.addSection({ title: "Recommendation" });
 {
-  const s = content("Our recommendation, scenario by scenario", "Recommendation");
+  const s = content("Our choice: GRASP-ILS for the ADEME pilot, with a rule to switch", "Recommendation");
   kicker(s, "Our own reading of our own numbers");
   const rec = [
     ["About 100 customers, time windows", "grasp", `${pct(sol.grasp.mean, 2)} mean gap, best known on ${fmt(sol.grasp.at_bks)} of 500 runs; significantly ahead of SA and Tabu Search`],
@@ -500,11 +500,17 @@ pres.addSection({ title: "Recommendation" });
     ["10 000 customers, no windows", "tabu", `the only good plan: ${S.synthetic.tabu ? pct(S.synthetic.tabu.vs_bound) : "n/a"} above a lower bound, minimum trucks; GRASP-ILS returns nothing`],
     ["Peak or night departure", "tabu", `as without traffic: the ranking does not change with the hour; the ${fmt(night("Paris").cut, 1)} % night saving is the traffic factor`],
   ];
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: MX, y: 1.4, w: 12.1, h: 0.85, fill: { color: K.navy }, line: { color: K.navy }, rectRadius: 0.08 });
+  T(s, [
+    { text: "Final choice  ", options: { bold: true, color: "AEB8E6", fontSize: 13, charSpacing: 2 } },
+    { text: "GRASP-ILS", options: { bold: true, color: K.white, fontSize: 20, fontFace: "Cambria" } },
+    { text: "   the brief is the CVRPTW: time windows, a depot, a few hundred deliveries. Switch to Tabu Search above 2 000 customers or without windows.", options: { color: "DCE3F7", fontSize: 14 } },
+  ], { x: MX + 0.3, y: 1.5, w: 11.5, h: 0.65, valign: "middle" });
   const rows = [["Scenario", "Choose", "Because (our data)"]].concat(rec.map((r) => [r[0], ALG[r[1]].name, r[2]]));
-  s.addTable(rows.map((r, i) => r.map((c, j) => ({ text: c, options: { fontSize: 13, fontFace: "Calibri", valign: "middle",
+  s.addTable(rows.map((r, i) => r.map((c, j) => ({ text: c, options: { fontSize: 12, fontFace: "Calibri", valign: "middle",
     bold: i === 0 || j === 1, color: i === 0 ? K.white : (j === 1 ? ALG[rec[i - 1][1]].color : K.navy),
     fill: { color: i === 0 ? K.navy : (i % 2 ? K.white : "F8F5EE") } } }))),
-  { x: MX, y: 1.5, w: 12.1, colW: [3.6, 2.1, 6.4], rowH: 0.68, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
+  { x: MX, y: 2.45, w: 12.1, colW: [3.6, 2.1, 6.4], rowH: 0.52, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
   T(s, "Caveat: windows were tested up to 1 000 customers, no windows from 1 000 to 10 000; we did not test 10 000 customers with windows.", { x: MX, y: 6.35, w: 12.1, h: 0.4, fontSize: 12.5, italic: true, color: K.soft });
   s.addNotes("Each line is backed by a slide we showed. The rule of thumb: time windows make the construction decisive (GRASP-ILS); without windows on large real networks the number of improving moves per second decides (Tabu Search); when the budget is long and the code compiled, SA catches up.");
 }
@@ -534,7 +540,7 @@ pres.addSection({ title: "Recommendation" });
 {
   const s = pres.addSlide({ masterName: "DARK", sectionTitle: "Recommendation" });
   T(s, "IN ONE SLIDE", { x: MX, y: 0.6, w: 6, h: 0.3, fontSize: 12, bold: true, color: "AEB8E6", charSpacing: 3 });
-  T(s, "A one component model that sees the clock, three metaheuristics measured to their limit, and a choice for each scenario",
+  T(s, "Our choice is GRASP-ILS for the ADEME pilot. When the city grows past 2 000 customers or has no windows, Tabu Search takes over",
     { x: MX, y: 1.0, w: 12, h: 1.5, fontFace: "Cambria", fontSize: 30, bold: true, color: K.white });
   const big = [
     [pct(sol.grasp.mean, 2), "GRASP-ILS mean gap on 500 Solomon runs, chosen method"],
@@ -547,7 +553,7 @@ pres.addSection({ title: "Recommendation" });
     T(s, l, { x, y: 4.05, w: 3.7, h: 0.9, fontSize: 15, color: "DCE3F7" });
   });
   T(s, "Thank you. Questions?", { x: MX, y: 5.6, w: 8, h: 0.6, fontFace: "Cambria", fontSize: 26, italic: true, color: K.white });
-  s.addNotes("Close in 20 seconds and open questions. The Q and A preparation is in presentation/qa.md.");
+  s.addNotes("Close in 20 seconds: one model with traffic inside the objective, three algorithms measured to their limit, one final choice (GRASP-ILS, because the brief is the CVRPTW and it wins every windowed test up to 1 000 customers) and one rule to switch (Tabu Search beyond 2 000 customers or without windows, from the sweep and the cities). Then open questions. The Q and A preparation is in presentation/qa.md.");
 }
 
 (async () => {
