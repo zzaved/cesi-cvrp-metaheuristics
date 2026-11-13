@@ -67,8 +67,8 @@ Grid on 6 tuning instances never used in the test (9 to 12 settings each, 2 seed
 factor at a time sensitivity study per algorithm, 3 seeds, around the tuned value (slide 16).
 
 **What is the limit of each algorithm?** (the professor's own words)
-- Tabu Search: the number of trucks with time windows. At 1 000 customers it uses about 60 % more
-  trucks than GRASP-ILS and its moves rarely empty a route: 37 % gap at 1 000, 20 s. Without windows
+- Tabu Search: the number of trucks with time windows. At 1 000 customers and 20 s it uses 175
+  trucks against 107 for GRASP-ILS (60 % more) and its moves rarely empty a route: 37 % gap at 1 000, 20 s. Without windows
   it is the best, up to 10 000 customers (18.6 % above a lower bound).
 - SA: time. 6 times more time halves its gap at 1 000 customers (21.8 % to 10.5 %), the largest
   gain of the three; at 10 000 customers 14 million moves leave it 84 % above the lower bound.
@@ -130,7 +130,7 @@ on the tuning set) would not change the ranking of section 8: GRASP-ILS would ga
 would stay third. Retuning means rerunning the 1 500 test runs; it is in section 10.
 
 **Tabu wins at 10 000 without windows. Would it win at 10 000 with windows?**
-Not tested, and we say so. With windows it already fails on trucks at 1 000 (171 against 106), so we
+Not tested, and we say so. With windows it already fails on trucks at 1 000 (175 against 107 at 20 s), so we
 would expect GRASP-ILS's construction to matter, if it can be made to finish (compiled).
 
 **Same ρ in Paris and São Paulo: what is country specific?**
@@ -140,8 +140,9 @@ need the graphs, which the RRNCO matrices do not include.
 
 **Your solver ran 684 s on a 300 s budget. Acceptable?**
 No. GRASP-ILS reads its clock only between iterations and kicks; at 10 000 customers one iteration is
-longer than the budget. It is a defect of our implementation, fixed by checking the time inside the
-construction and the descent and returning the best partial plan completed by a greedy insertion.
+longer than the budget. It is a defect of our implementation, and it is not fixed: every reported result comes from this
+original code. The proposed fix is to check the time inside the construction and the descent and
+return the best partial plan completed by a greedy insertion; it was not implemented or run.
 
 ## How each algorithm is built (anyone may be asked any of these)
 
@@ -245,7 +246,7 @@ Without kicks (plain GRASP) the gap doubles: 2.50 % against 1.34 %.
 
 **Its weakness?**
 Time per iteration. One construction plus descent takes about 60 s at 2 000 customers, and more
-than 684 s at 10 000. The clock is read only between iterations and kicks (a defect, see above).
+than 684 s at 10 000. The clock is read only between iterations and kicks (a defect, not fixed; see above).
 
 ### Simulated Annealing (Dag, `src/cvrp/sa_static.py`, `src/cvrp/sa_vrptw.py`)
 
@@ -342,3 +343,24 @@ tuning. This avoids overfitting the parameters.
 - A regret start for Tabu Search.
 - Retuning with tenure 35 and α 0.7.
 - More seeds at 10 000 customers.
+
+## Questions about the slides themselves
+
+**Your model minimizes duration, but slides 8 to 14 show distance. Contradiction?**
+No. The published best known values (Solomon, Homberger) are distances, so to measure a gap the
+benchmarks use the distance objective. Same solvers; only the route cost function changes. SA's
+solver has the distance objective only, so the city comparison of all three is also in km. The
+duration objective with traffic is run in the cities for Tabu Search and GRASP-ILS (08:00 and 22:00):
+same ranking (Paris 1 831 against 2 390 min at 08:00).
+
+**Is the night result the same routes as the day result?**
+No. Each departure hour is optimized separately by Tabu Search (5 seeds). The saving equals the
+08:00 factor because the routes are short (32 min): every leg is priced at one ρ.
+
+**Did you test 10 000 customers with time windows?**
+No. Windows stop at 1 000 customers (Homberger). The 10 000 run and the 1 000 to 5 000 sweep have no
+windows. The "switch to Tabu Search above 2 000" rule comes from those runs without windows.
+
+**Is the traffic profile measured in Paris and São Paulo?**
+No. The road networks are real (RRNCO, OpenStreetMap, shortest paths). ρ(h) is our assumption, the
+same in both cities.
