@@ -162,9 +162,34 @@ def run_guarded(job: tuple) -> dict:
     }
 
 
+def grasp_start(names=("R1_10_1", "U1000", "U2000", "U5000")) -> pd.DataFrame:
+    """Seconds of one GRASP-ILS construction plus its first descent, without perturbations.
+
+    A GRASP-ILS iteration is a construction, a descent and up to 90 perturbations, and the clock
+    is read between perturbations; this measures the part that cannot be interrupted.
+    """
+    rows = []
+    for name in names:
+        inst = synthetic(int(name[1:])) if name.startswith("U") else homberger_study.load(name)
+        t0 = time.perf_counter()
+        grasp(inst, GRASPParams(alpha=0.3, improvement="first", perturb_kicks=0, iterations=1), 1)
+        rows.append(
+            {
+                "instance": name,
+                "n": inst.n_customers,
+                "construction_descent_s": round(time.perf_counter() - t0, 1),
+            }
+        )
+        print(rows[-1], flush=True)
+    return pd.DataFrame(rows)
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "homberger"
     out = RESULTS / f"scale_{cmd}.csv"
+    if cmd == "grasp_start":
+        grasp_start().to_csv(out, index=False)
+        sys.exit()
     if cmd == "homberger":
         rows, all_jobs = [], homberger_jobs()
         results = Pool(WORKERS).imap_unordered(run_one, all_jobs)

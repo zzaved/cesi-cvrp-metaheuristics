@@ -9,6 +9,12 @@ Objectives:
 - ``duration 08:00`` and ``duration 22:00``: total route duration in minutes with the hourly
   traffic of notebook 01, all trucks leaving at 8:00 or at 22:00 (the night); Tabu Search and
   GRASP-ILS (the public SA solver has the distance objective only).
+- ``time + windows``: the same customers with the time windows of the model (``load_city`` with
+  ``time_windows=True``: depot day 8:00 to 18:00, one window of 120 min per customer, 5 min of
+  service, every customer reachable alone at peak traffic). Objective: total free-flow travel
+  time in minutes (rho = 1), so all three algorithms compete; the CVRPTW of the brief.
+- ``duration 08:00 + windows``: the full model of notebook 01 on real roads: duration with hourly
+  traffic and time windows, trucks leaving at 8:00; Tabu Search and GRASP-ILS.
 
 Every run uses the tuned setting of section 8.1, the same time limit and 5 seeds. The reported
 cost is recomputed from the routes with the shared evaluator (distance) or with
@@ -21,6 +27,8 @@ Usage:
     python experiments/city_study.py metrics   # -> results/city_metrics.csv
     python experiments/city_study.py report
     python experiments/city_study.py control   # -> results/city_control.csv
+    python experiments/city_study.py windows   # adds the two windows objectives
+    python experiments/city_study.py rerun grasp  # reruns one algorithm, replaces its rows
 """
 
 from __future__ import annotations
@@ -41,7 +49,7 @@ from sa_adapter import run_sa  # noqa: E402
 from cvrp.cities import load_city  # noqa: E402
 from cvrp.grasp import GRASPParams, grasp  # noqa: E402
 from cvrp.solution import Solution  # noqa: E402
-from cvrp.tabu import TabuParams, distance_cost, duration_cost, tabu_search  # noqa: E402
+from cvrp.tabu import RHO, TabuParams, distance_cost, duration_cost, tabu_search  # noqa: E402
 
 CITIES = {"Paris": "Paris_data.npz", "Sao_Paulo": "Sao_Paulo_data.npz"}
 DATA = ROOT / "data" / "cities"
@@ -49,14 +57,44 @@ RESULTS = ROOT / "results"
 TIME_LIMIT = 60.0
 SEEDS = [1, 2, 3, 4, 5]
 WORKERS = 7
-OBJECTIVES = {"distance": None, "duration 08:00": 480.0, "duration 22:00": 1320.0}
-ALGOS = {"distance": ["tabu", "grasp", "sa"], "duration": ["tabu", "grasp"]}
+OBJECTIVES = {
+    "distance": None,
+    "duration 08:00": 480.0,
+    "duration 22:00": 1320.0,
+    "time + windows": None,
+    "duration 08:00 + windows": 480.0,
+}
+WINDOWS = ["time + windows", "duration 08:00 + windows"]
+ALGOS = {"static": ["tabu", "grasp", "sa"], "duration": ["tabu", "grasp"]}
+
+
+def algos(objective: str) -> list[str]:
+    """Algorithms run on an objective: SA has no hourly traffic, so duration runs omit it."""
+    return ALGOS["static" if OBJECTIVES[objective] is None else "duration"]
 
 
 def instance(city: str, objective: str):
-    """The 999 customer instance of a city, in km or in free-flow minutes."""
+    """The 999 customer instance of a city: km for ``distance``, free-flow minutes otherwise."""
     metric = "distance" if objective == "distance" else "duration"
-    return load_city(DATA / CITIES[city], n=None, metric=metric, seed=0)
+    return load_city(
+        DATA / CITIES[city], n=None, metric=metric, seed=0, time_windows="windows" in objective
+    )
+
+
+def hours_used(inst, route: list[int], start: float) -> int:
+    """Number of different hours in which the legs of a route start (traffic periods crossed)."""
+    d, s = inst.dist, inst.service_times
+    tw = inst.has_time_windows
+    t, prev, hours = start, 0, set()
+    for c in [*route, 0]:
+        hours.add(int(t // 60) % 24)
+        t += RHO[int(t // 60) % 24] * d[prev][c]
+        if c and tw:
+            t = max(t, inst.ready_times[c])
+        if c and s is not None:
+            t += s[c]
+        prev = c
+    return len(hours)
 
 
 def solve(
@@ -104,23 +142,27 @@ def run_one(job: tuple) -> dict:
         "algorithm": algo,
         "seed": seed,
         "time_limit": limit,
-        "kicks": kicks if algo == "grasp" else None,
+        "kicks": float(kicks) if algo == "grasp" else float("nan"),
         "cost": round(checked, 3),
         "reported": round(reported, 3),
         "cost_matches": abs(checked - reported) <= 1e-6 * max(1.0, abs(checked)),
         "feasible": sol.is_feasible(inst),
         "routes": len(routes),
         "iterations": iterations,
+        "multi_hour_routes": None
+        if start is None
+        else sum(hours_used(inst, r, start) > 1 for r in routes),
     }
 
 
-def jobs() -> list[tuple[str, str, str, int]]:
-    """Every run of the study."""
+def jobs(objectives=None, only: str | None = None) -> list[tuple[str, str, str, int]]:
+    """Every run of the study (optionally some objectives, or one algorithm)."""
     return [
         (city, objective, algo, seed)
         for city in CITIES
-        for objective in OBJECTIVES
-        for algo in ALGOS["distance" if objective == "distance" else "duration"]
+        for objective in objectives or OBJECTIVES
+        for algo in algos(objective)
+        if only in (None, algo)
         for seed in SEEDS
     ]
 
@@ -207,14 +249,30 @@ if __name__ == "__main__":
         report()
     else:
         control = cmd == "control"
-        all_jobs = control_jobs() if control else jobs()
+        only = sys.argv[2] if len(sys.argv) > 2 else None
+        if control:
+            all_jobs = [j for j in control_jobs() if only in (None, j[2])]
+        elif cmd == "windows":
+            all_jobs = jobs(WINDOWS)
+        else:
+            all_jobs = jobs([o for o in OBJECTIVES if o not in WINDOWS], only)
         out = RESULTS / ("city_control.csv" if control else "city_benchmark.csv")
+        merge = cmd in ("rerun", "windows") or (control and only is not None)
+        old = pd.read_csv(out) if out.exists() and merge else None
+        key = ["city", "objective", "algorithm", "seed", "time_limit", "kicks"]
+        if old is not None and "time_limit" not in old:  # first campaign: 60 s, 90 kicks
+            old.insert(4, "time_limit", TIME_LIMIT)
+            old.insert(5, "kicks", old.algorithm.map({"grasp": 90}))
         print(f"{len(all_jobs)} runs x {TIME_LIMIT:.0f} s on {WORKERS} workers", flush=True)
         rows = []
         with Pool(WORKERS) as pool:
             for i, row in enumerate(pool.imap_unordered(run_one, all_jobs), 1):
                 rows.append(row)
-                pd.DataFrame(rows).to_csv(out, index=False)
+                new = pd.DataFrame(rows)
+                if old is not None:  # replace the rows of the runs made again, keep the others
+                    kept = old.merge(new[key], on=key, how="left", indicator=True)
+                    new = pd.concat([old[(kept["_merge"] == "left_only").to_numpy()], new])
+                new.to_csv(out, index=False)
                 print(
                     f"{i}/{len(all_jobs)} {row['city']} {row['objective']} {row['algorithm']}"
                     f" {row['cost']} ok={row['feasible'] and row['cost_matches']}",
