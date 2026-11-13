@@ -545,9 +545,12 @@
     "city": "Paris",
     "objective": "distance",
     "algorithm": "grasp",
-    "mean": 360.94,
-    "best": 352.53,
-    "std": 8.49
+    "mean": 325.07,
+    "best": 318.61,
+    "std": 3.89,
+    "routes": 58.0,
+    "iterations": 2.0,
+    "multi_hour": null
    },
    {
     "city": "Paris",
@@ -555,7 +558,10 @@
     "algorithm": "sa",
     "mean": 420.65,
     "best": 410.94,
-    "std": 12.88
+    "std": 12.88,
+    "routes": 60.8,
+    "iterations": 27887309.0,
+    "multi_hour": null
    },
    {
     "city": "Paris",
@@ -563,15 +569,21 @@
     "algorithm": "tabu",
     "mean": 334.94,
     "best": 331.3,
-    "std": 3.49
+    "std": 3.49,
+    "routes": 57.0,
+    "iterations": 27796.0,
+    "multi_hour": null
    },
    {
     "city": "Paris",
     "objective": "duration 08:00",
     "algorithm": "grasp",
-    "mean": 2390.01,
-    "best": 2349.8,
-    "std": 48.51
+    "mean": 2259.41,
+    "best": 2216.0,
+    "std": 34.39,
+    "routes": 57.0,
+    "iterations": 1.0,
+    "multi_hour": 3.6
    },
    {
     "city": "Paris",
@@ -579,15 +591,43 @@
     "algorithm": "tabu",
     "mean": 1831.25,
     "best": 1814.08,
-    "std": 12.86
+    "std": 12.86,
+    "routes": 57.0,
+    "iterations": 22785.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Paris",
+    "objective": "duration 08:00 + windows",
+    "algorithm": "grasp",
+    "mean": 21254.4,
+    "best": 21069.97,
+    "std": 146.79,
+    "routes": 57.0,
+    "iterations": 1.0,
+    "multi_hour": 57.0
+   },
+   {
+    "city": "Paris",
+    "objective": "duration 08:00 + windows",
+    "algorithm": "tabu",
+    "mean": 20188.65,
+    "best": 20088.58,
+    "std": 95.4,
+    "routes": 57.6,
+    "iterations": 27595.0,
+    "multi_hour": 57.2
    },
    {
     "city": "Paris",
     "objective": "duration 22:00",
     "algorithm": "grasp",
-    "mean": 1175.72,
+    "mean": 1190.81,
     "best": 1153.76,
-    "std": 22.81
+    "std": 26.06,
+    "routes": 57.0,
+    "iterations": 1.0,
+    "multi_hour": 0.0
    },
    {
     "city": "Paris",
@@ -595,15 +635,54 @@
     "algorithm": "tabu",
     "mean": 1014.0,
     "best": 999.67,
-    "std": 9.58
+    "std": 9.58,
+    "routes": 57.0,
+    "iterations": 29943.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Paris",
+    "objective": "time + windows",
+    "algorithm": "grasp",
+    "mean": 1313.42,
+    "best": 1276.98,
+    "std": 26.25,
+    "routes": 58.2,
+    "iterations": 2.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Paris",
+    "objective": "time + windows",
+    "algorithm": "sa",
+    "mean": 1539.39,
+    "best": 1507.45,
+    "std": 24.28,
+    "routes": 68.2,
+    "iterations": 32156314.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Paris",
+    "objective": "time + windows",
+    "algorithm": "tabu",
+    "mean": 1369.04,
+    "best": 1350.93,
+    "std": 11.55,
+    "routes": 58.0,
+    "iterations": 31088.0,
+    "multi_hour": null
    },
    {
     "city": "Sao_Paulo",
     "objective": "distance",
     "algorithm": "grasp",
-    "mean": 416.41,
-    "best": 406.69,
-    "std": 7.75
+    "mean": 359.15,
+    "best": 349.54,
+    "std": 5.63,
+    "routes": 58.0,
+    "iterations": 1.0,
+    "multi_hour": null
    },
    {
     "city": "Sao_Paulo",
@@ -611,7 +690,10 @@
     "algorithm": "sa",
     "mean": 459.8,
     "best": 442.7,
-    "std": 10.2
+    "std": 10.2,
+    "routes": 60.8,
+    "iterations": 31051059.0,
+    "multi_hour": null
    },
    {
     "city": "Sao_Paulo",
@@ -619,15 +701,21 @@
     "algorithm": "tabu",
     "mean": 382.91,
     "best": 376.87,
-    "std": 5.01
+    "std": 5.01,
+    "routes": 57.0,
+    "iterations": 36136.0,
+    "multi_hour": null
    },
    {
     "city": "Sao_Paulo",
     "objective": "duration 08:00",
     "algorithm": "grasp",
-    "mean": 1727.48,
-    "best": 1689.82,
-    "std": 24.26
+    "mean": 1737.53,
+    "best": 1691.93,
+    "std": 25.9,
+    "routes": 57.0,
+    "iterations": 1.0,
+    "multi_hour": 0.0
    },
    {
     "city": "Sao_Paulo",
@@ -635,15 +723,43 @@
     "algorithm": "tabu",
     "mean": 1511.39,
     "best": 1491.28,
-    "std": 16.98
+    "std": 16.98,
+    "routes": 57.0,
+    "iterations": 37505.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Sao_Paulo",
+    "objective": "duration 08:00 + windows",
+    "algorithm": "grasp",
+    "mean": 20915.83,
+    "best": 20465.63,
+    "std": 316.91,
+    "routes": 57.0,
+    "iterations": 1.0,
+    "multi_hour": 57.0
+   },
+   {
+    "city": "Sao_Paulo",
+    "objective": "duration 08:00 + windows",
+    "algorithm": "tabu",
+    "mean": 19542.08,
+    "best": 19380.02,
+    "std": 176.11,
+    "routes": 57.8,
+    "iterations": 25595.0,
+    "multi_hour": 57.0
    },
    {
     "city": "Sao_Paulo",
     "objective": "duration 22:00",
     "algorithm": "grasp",
-    "mean": 967.81,
-    "best": 891.56,
-    "std": 62.16
+    "mean": 952.92,
+    "best": 867.19,
+    "std": 71.48,
+    "routes": 57.4,
+    "iterations": 1.0,
+    "multi_hour": 0.0
    },
    {
     "city": "Sao_Paulo",
@@ -651,7 +767,43 @@
     "algorithm": "tabu",
     "mean": 850.47,
     "best": 841.63,
-    "std": 6.79
+    "std": 6.79,
+    "routes": 57.0,
+    "iterations": 25282.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Sao_Paulo",
+    "objective": "time + windows",
+    "algorithm": "grasp",
+    "mean": 1067.51,
+    "best": 1038.88,
+    "std": 18.15,
+    "routes": 58.2,
+    "iterations": 2.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Sao_Paulo",
+    "objective": "time + windows",
+    "algorithm": "sa",
+    "mean": 1279.48,
+    "best": 1266.29,
+    "std": 11.98,
+    "routes": 68.6,
+    "iterations": 29105869.0,
+    "multi_hour": null
+   },
+   {
+    "city": "Sao_Paulo",
+    "objective": "time + windows",
+    "algorithm": "tabu",
+    "mean": 1141.12,
+    "best": 1133.03,
+    "std": 7.49,
+    "routes": 58.0,
+    "iterations": 30805.0,
+    "multi_hour": null
    }
   ],
   "metrics": {
@@ -680,32 +832,32 @@
     "algorithm": "grasp",
     "time_limit": 60.0,
     "kicks": 0,
-    "mean": 357.51,
-    "best": 352.53
+    "mean": 360.78,
+    "best": 359.42
    },
    {
     "city": "Paris",
     "algorithm": "grasp",
     "time_limit": 60.0,
     "kicks": 10,
-    "mean": 357.51,
-    "best": 352.53
+    "mean": 334.56,
+    "best": 331.82
    },
    {
     "city": "Paris",
     "algorithm": "grasp",
     "time_limit": 60.0,
     "kicks": 30,
-    "mean": 357.51,
-    "best": 352.53
+    "mean": 329.88,
+    "best": 327.92
    },
    {
     "city": "Paris",
     "algorithm": "grasp",
     "time_limit": 300.0,
     "kicks": 90,
-    "mean": 344.66,
-    "best": 336.13
+    "mean": 319.52,
+    "best": 318.48
    },
    {
     "city": "Paris",
@@ -720,32 +872,32 @@
     "algorithm": "grasp",
     "time_limit": 60.0,
     "kicks": 0,
-    "mean": 412.23,
-    "best": 406.69
+    "mean": 425.09,
+    "best": 422.58
    },
    {
     "city": "Sao_Paulo",
     "algorithm": "grasp",
     "time_limit": 60.0,
     "kicks": 10,
-    "mean": 412.23,
-    "best": 406.69
+    "mean": 374.26,
+    "best": 370.32
    },
    {
     "city": "Sao_Paulo",
     "algorithm": "grasp",
     "time_limit": 60.0,
     "kicks": 30,
-    "mean": 412.23,
-    "best": 406.69
+    "mean": 363.96,
+    "best": 362.97
    },
    {
     "city": "Sao_Paulo",
     "algorithm": "grasp",
     "time_limit": 300.0,
     "kicks": 90,
-    "mean": 412.23,
-    "best": 406.69
+    "mean": 357.08,
+    "best": 355.48
    },
    {
     "city": "Sao_Paulo",
@@ -757,6 +909,36 @@
    }
   ]
  },
+ "pilot": [
+  {
+   "city": "Paris",
+   "algorithm": "grasp",
+   "mean": 6123.81,
+   "best": 6037.71,
+   "iterations": 1.0
+  },
+  {
+   "city": "Paris",
+   "algorithm": "tabu",
+   "mean": 5993.65,
+   "best": 5939.38,
+   "iterations": 30330.0
+  },
+  {
+   "city": "Sao_Paulo",
+   "algorithm": "grasp",
+   "mean": 5956.94,
+   "best": 5890.12,
+   "iterations": 1.0
+  },
+  {
+   "city": "Sao_Paulo",
+   "algorithm": "tabu",
+   "mean": 5681.4,
+   "best": 5629.98,
+   "iterations": 31433.0
+  }
+ ],
  "sensitivity": {
   "grasp": [
    {

@@ -138,7 +138,16 @@ def sweep() -> list:
 def cities() -> dict:
     """Real cities: costs, network metrics and the control runs."""
     c = pd.read_csv(RES / "city_benchmark.csv")
-    g = c.groupby(["city", "objective", "algorithm"]).cost.agg(["mean", "std", "min"])
+    if "multi_hour_routes" not in c:
+        c["multi_hour_routes"] = float("nan")
+    g = c.groupby(["city", "objective", "algorithm"]).agg(
+        mean=("cost", "mean"),
+        std=("cost", "std"),
+        min=("cost", "min"),
+        routes=("routes", "mean"),
+        iterations=("iterations", "mean"),
+        multi_hour=("multi_hour_routes", "mean"),
+    )
     m = pd.read_csv(RES / "city_metrics.csv").set_index("city")
     ctl = pd.read_csv(RES / "city_control.csv")
     ctl = ctl.groupby(["city", "algorithm", "time_limit", "kicks"], dropna=False).cost.agg(
@@ -153,6 +162,9 @@ def cities() -> dict:
                 "mean": r(v["mean"]),
                 "best": r(v["min"]),
                 "std": r(v["std"]),
+                "routes": r(v["routes"], 1),
+                "iterations": r(v["iterations"], 0),
+                "multi_hour": r(v["multi_hour"], 1),
             }
             for k, v in g.iterrows()
         ],
@@ -169,6 +181,24 @@ def cities() -> dict:
             for k, v in ctl.iterrows()
         ],
     }
+
+
+def pilot() -> list[dict]:
+    """300 customers per city, full model (traffic and windows): Tabu Search against GRASP-ILS."""
+    c = pd.read_csv(RES / "city_pilot.csv")
+    g = c.groupby(["city", "algorithm"]).agg(
+        mean=("cost", "mean"), best=("cost", "min"), iterations=("iterations", "mean")
+    )
+    return [
+        {
+            "city": k[0],
+            "algorithm": k[1],
+            "mean": r(v["mean"]),
+            "best": r(v["best"]),
+            "iterations": r(v["iterations"], 0),
+        }
+        for k, v in g.iterrows()
+    ]
 
 
 def sensitivity() -> dict:
@@ -209,6 +239,7 @@ if __name__ == "__main__":
         "synthetic": synthetic(),
         "sweep": sweep(),
         "cities": cities(),
+        "pilot": pilot(),
         "sensitivity": sensitivity(),
         "exact": exact(),
     }

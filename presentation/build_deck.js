@@ -397,7 +397,7 @@ pres.addSection({ title: "Three metaheuristics" });
       ],
       idea: "Memory, not chance, drives it away from where it has been.",
       intr: "tenure 20 · 200 candidates · 15 neighbors; the candidate list is the fragile one",
-      extr: "time windows hurt it (extra trucks); no windows and large n favor it",
+      extr: "windows alone hurt it (extra trucks); hourly traffic and very large n favor it",
     },
     sa: {
       steps: [
@@ -415,13 +415,13 @@ pres.addSection({ title: "Three metaheuristics" });
       steps: [
         "Construct (GRASP): regret insertion, serving first customers with few good options; pick at random among the best (α = 0.3).",
         "Local search: descent over 6 neighborhoods (relocate, swap, 2-opt*, Or-opt, 2-opt, cross-exchange), granular, first improvement.",
-        "Kick (ILS): remove a cluster of 10 to 20 % of the customers, reinsert them, descend again; keep only if better.",
-        "Up to 90 kicks per iteration, then a new construction; keep the best plan over all iterations.",
+        "Perturbation (ILS, \"kick\" in our code): ruin 10 to 20 % of the customers around a random one, recreate by cheapest insertion, descend; keep only if better.",
+        "Up to P = 90 perturbations per iteration, then a new construction; keep the best plan over all iterations.",
         "Time windows checked in O(1) per move (forward and backward time slack per route).",
       ],
-      idea: "Good random starts, deep descents, kicks to escape.",
-      intr: "α 0.3 · 90 kicks · 20 neighbors; the kicks matter most",
-      extr: "time windows favor it; at large n one iteration fills the budget",
+      idea: "Good random starts, deep descents, perturbations to escape.",
+      intr: "α 0.3 · P = 90 perturbations · 20 neighbors; P matters most",
+      extr: "windows favor it; hourly traffic and n ≥ 5 000 make its iterations too slow",
     },
   };
   ["tabu", "sa", "grasp"].forEach((a, i) => {
@@ -445,9 +445,9 @@ pres.addSection({ title: "Three metaheuristics" });
   s.addNotes(`Each author explains their own column in about 40 s; anyone must be able to explain all three.
 TABU (Pablo): starts from a nearest-neighbor plan. A neighborhood move changes the plan a little: relocate moves one customer, swap exchanges two, 2-opt reverses a piece of a route, 2-opt* exchanges the ends of two routes. Evaluating all moves at 1 000 customers is millions per step, so it samples 200, each near one of a customer's 15 closest neighbors. It takes the best one even if it is worse; to avoid undoing it right away, the customers it moved are tabu for 10 to 30 iterations (tenure 20, drawn at random to avoid cycles). Aspiration: a tabu move is still allowed if it beats the best plan ever found.
 SA (Dag): one random move per step. Delta is the change in cost; T, the temperature, is the tolerance for getting worse. Improvements are always accepted; a worse plan is accepted with probability e^(-Delta/T). Example: Delta = 5, T = 10 gives e^-0.5 = 61 %; T = 1 gives e^-5 = 0.7 %. T falls exponentially from T0 to Tf exactly over the time budget, so the search ends as a pure descent.
-GRASP-ILS (Farida): GRASP builds a plan by regret insertion (customers with few good options first) with randomness controlled by alpha (0 greedy, 1 random). Then a descent over six neighborhoods. ILS: a kick removes 10 to 20 % of the customers around a random one, reinserts them and descends again; the result is kept only if better. 90 kicks is the configured number; on large instances the first construction and descent already use the whole budget, so few or no kicks run (slides 11 to 14).
+GRASP-ILS (Farida): GRASP builds a plan by regret insertion (customers with few good options first) with randomness controlled by alpha (0 greedy, 1 random). Then a descent over six neighborhoods. ILS adds PERTURBATIONS. If asked "is it really called a kick?": the standard ILS term is perturbation (Lourenco, Martin and Stutzle 2003); kick is the older informal name from the double-bridge move for the TSP (Martin, Otto and Felten 1991), and our code keeps it in the parameter name perturb_kicks. Ours is a ruin and recreate move: remove 10 to 20 % of the customers (a random one, its nearest neighbors, then random ones), reinsert them tightest window first at their cheapest place, descend, and keep the result only if it is better. Up to 90 per iteration. At 1 000 customers the construction and first descent take about 2 s and the perturbations fill the rest of the budget, so there is no second construction; from 5 000 customers the construction and descent alone exceed a 60 s budget (slide 13).
 Parameters were tuned on 6 instances never used in the test.
-Bottom of each column: INTRINSIC = the algorithm's own parameters, which we choose (studied one at a time on slide 16). EXTRINSIC = the scenario, which the algorithm does not choose: size, time windows, road network, budget, hour (slides 8 and 11 to 15). Tabu: candidate list is the fragile parameter; windows hurt it, no windows and large n favor it. SA: robust to temperature; needs time. GRASP-ILS: kicks matter most; windows favor it, large n makes one iteration fill the budget.`);
+Bottom of each column: INTRINSIC = the algorithm's own parameters, which we choose (studied one at a time on slide 17). EXTRINSIC = the scenario, which the algorithm does not choose: size, time windows, road network, budget, hour (slides 8 and 11 to 15). Tabu: candidate list is the fragile parameter; windows alone hurt it (extra trucks), hourly traffic and very large n favor it. SA: robust to temperature; needs time. GRASP-ILS: the number of perturbations matters most; windows favor it, hourly traffic (exact time-dependent evaluation) and n of 5 000 or more make its iterations too slow.`);
 }
 
 // ================================================================== 7. race animation
@@ -520,11 +520,11 @@ pres.addSection({ title: "Round 2" });
     { x: MX, y: 2.2, w: 12, h: 0.4, fontSize: 15, color: "DCE3F7" });
   const asks = [
     ["Larger instances", "400 to 10 000 customers, not only 100", "slides 11 to 13"],
-    ["Real road networks", "real streets in two countries, not straight lines", "slides 10, 14"],
+    ["Real road networks", "real streets in two countries, with and without windows", "slides 10, 14, 15"],
     ["Scalability", "where each algorithm breaks, and why", "slides 11 to 13"],
-    ["Parameter sensitivity", "how fragile each tuned setting is", "slide 16"],
-    ["Departure time", "what the hour does to route duration", "slide 15"],
-    ["A recommendation", "which algorithm, in which scenario", "slide 17"],
+    ["Parameter sensitivity", "how fragile each tuned setting is", "slide 17"],
+    ["Departure time", "what the hour does to route duration", "slides 15, 16"],
+    ["A recommendation", "which algorithm, in which scenario", "slide 18"],
   ];
   asks.forEach(([h, b, where], i) => {
     const x = MX + (i % 3) * 4.1, y = 2.85 + Math.floor(i / 3) * 1.75;
@@ -549,19 +549,19 @@ pres.addSection({ title: "Round 2" });
     ["Solomon (round 1)", "100", "yes", "distance", "best known", "quality, statistics"],
     ["Homberger R1", "400 · 800 · 1 000", "yes", "distance", "best known", "scale, windows"],
     ["Synthetic uniform", "1 000 to 10 000", "no", "distance", "lower bound", "computing limit"],
-    ["Paris (France)", "999 real", "no", "distance + duration", "best of our runs", "real roads"],
-    ["São Paulo (Brazil)", "999 real", "no", "distance + duration", "best of our runs", "second country"],
+    ["Paris (France)", "999 (and 300)", "no + yes", "km, time, duration", "best of our runs", "real roads"],
+    ["São Paulo (Brazil)", "999 (and 300)", "no + yes", "km, time, duration", "best of our runs", "second country"],
   ];
   s.addTable(rows.map((r, i) => r.map((c, j) => ({ text: c, options: {
     bold: i === 0 || j === 0, color: i === 0 ? K.white : (j === 2 && c === "no" ? K.verm : K.navy), fill: { color: i === 0 ? K.navy : (i % 2 ? K.white : "F8F5EE") },
     fontSize: 11, fontFace: "Calibri", valign: "middle" } }))), { x: MX, y: 1.5, w: 8.0, colW: [1.75, 1.4, 0.85, 1.55, 1.2, 1.25], rowH: 0.4,
     border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: MX, y: 4.55, w: 8.0, h: 0.5, fill: { color: "FBE3DC" }, line: { color: K.verm }, rectRadius: 0.06 });
-  T(s, "Time windows were tested up to 1 000 customers. The 10 000-customer run has no time windows.",
+  T(s, "Time windows were tested up to 1 000 customers (Homberger, both cities). The 10 000-customer run has no time windows.",
     { x: MX + 0.2, y: 4.63, w: 7.6, h: 0.36, fontSize: 12.5, bold: true, color: K.verm, valign: "middle" });
   T(s, [
     { text: "Why distance on benchmarks? ", options: { bold: true } },
-    { text: "Published reference values are distances. Same solvers; only the route cost function changes (distance, or duration with ρ(h)). Duration with traffic is run in the cities (slide 15).\n" },
+    { text: "Published reference values are distances. Same solvers; only the route cost function changes (distance, or duration with ρ(h)). Duration with traffic is run in the cities (slides 15 and 16).\n" },
     { text: "Cities: ", options: { bold: true } },
     { text: "RRNCO dataset, built on OpenStreetMap. Real road network; distances and free-flow times are shortest paths on the real graph. The hourly factor ρ(h) is our assumed profile, the same in both cities." },
   ], { x: MX, y: 5.2, w: 8.0, h: 1.65, fontSize: 11.5, paraSpaceAfter: 4 });
@@ -606,7 +606,7 @@ Right card: mean speed is total free-flow km divided by total free-flow time; ci
   cap(s, "Not the same scenario as the 10 000-customer run (slide 13): here every customer has a time window.", { x: MX, y: 6.35, w: 7.3, h: 0.5, fontSize: 11.5 });
   const g = (a) => hom(a, 1000, 20);
   const notes = [
-    [K.cobalt, `GRASP-ILS  ${pct(g("grasp").gap)}`, `Best at every size. At 1 000 it completes a single iteration in 20 s: its regret construction alone gives the best start.`],
+    [K.cobalt, `GRASP-ILS  ${pct(g("grasp").gap)}`, `Best at every size. At 1 000 construction and first descent take about 2 s; perturbations fill the rest, so only one construction is made.`],
     [K.verm, `Simulated Annealing  ${pct(g("sa").gap)}`, `${fmt(g("sa").iterations / 1e6)} million moves in 20 s are only 16 000 per customer: not enough exploration yet (slide 12).`],
     [K.ochre, `Tabu Search  ${pct(g("tabu").gap)}`, `${fmt(g("tabu").routes)} trucks against ${fmt(g("grasp").routes)} for GRASP-ILS. Its start opens too many routes and its moves rarely empty one.`],
   ];
@@ -619,7 +619,7 @@ Right card: mean speed is total free-flow km divided by total free-flow time; ci
   s.addNotes(`FARIDA (about 1.5 min).
 Setup: Homberger R1 instances, random customers with time windows, 400, 800 and 1 000 customers; the 100 point is Solomon's R1 class. Distance objective, gap to the best known value, 20 s, 3 seeds.
 "All three lose quality as n grows: same time budget, much bigger problem. But not at the same speed."
-GRASP-ILS: the best at every size; at 1 000 customers it is at 9.9 % and does only one iteration in 20 s, so what carries it is its regret construction.
+GRASP-ILS: the best at every size; at 1 000 customers it is at 9.9 %. Its construction and first descent take about 2 s; the perturbations use the rest of the 20 s, so it builds only one plan from scratch. The regret construction plus perturbations carry it.
 SA: 21.8 %. 16 million moves sounds a lot, but it is 16 000 per customer against 420 000 on Solomon: it simply has not explored enough. Next slide shows that time fixes much of it.
 Tabu: 37.3 %. It uses 175 trucks against 107 for GRASP-ILS. Its nearest-neighbor start opens a new route whenever a window blocks, and relocate and swap rarely empty a whole route, so the extra trucks stay. That is a structural limit, not a time limit.
 Remind: this is with windows; slide 13 is a different scenario without windows.`);
@@ -640,7 +640,7 @@ Remind: this is with windows; slide 13 is a different scenario without windows.`
   { x: 8.2, y: 1.75, w: 4.5, colW: [1.95, 0.85, 0.85, 0.85], rowH: 0.4, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
   const sa20 = hom("sa", 1000, 20).gap, sa120 = hom("sa", 1000, 120).gap;
   const rd = [
-    [K.cobalt, "GRASP-ILS ahead at every budget", `${pct(hom("grasp", 1000, 20).gap)} → ${pct(hom("grasp", 1000, 120).gap)}: one or two iterations fit, so time helps little.`],
+    [K.cobalt, "GRASP-ILS ahead at every budget", `${pct(hom("grasp", 1000, 20).gap)} → ${pct(hom("grasp", 1000, 120).gap)}: one construction, the extra time goes to perturbations.`],
     [K.verm, "SA gains the most", `${pct(sa20)} → ${pct(sa120)}, divided by ${(sa20 / sa120).toFixed(1)}: it was short of time.`],
     [K.ochre, "Tabu barely moves", `${pct(hom("tabu", 1000, 20).gap)} → ${pct(hom("tabu", 1000, 120).gap)}: its problem is the trucks.`],
   ];
@@ -654,7 +654,7 @@ Remind: this is with windows; slide 13 is a different scenario without windows.`
     { x: 8.35, y: 5.88, w: 4.2, h: 0.92, fontSize: 11 });
   s.addNotes(`FARIDA (about 1.5 min).
 "Same 1 000-customer instances with windows, now with 20, 60 and 120 seconds. The question: is the gap a lack of time, or a limit of the method? If more time closes it, time was the problem."
-Table, mean of 3 seeds: GRASP-ILS 9.9, 9.0, 7.8 %: ahead at every budget. SA 21.8, 15.0, 10.5 %: divided by 2.1, the largest gain; it was starved of time. Tabu 37.3 to 31.7 %: almost flat, because its gap is extra trucks, not missing time.
+Table, mean of 3 seeds: GRASP-ILS 9.9, 9.0, 7.8 %: ahead at every budget. SA 21.8, 15.0, 10.4 %: divided by 2.1, the largest gain; it was starved of time. Tabu 37.3 to 31.7 %: almost flat, because its gap is extra trucks, not missing time.
 The animation is one 60 s run per algorithm: GRASP-ILS improves in rare large jumps, SA slides down continuously, Tabu flattens early.
 7 % target: the brief caps the grade when the gap exceeds 7 to 10 %; we use the stricter 7 %. GRASP-ILS meets it at 800 customers with 120 s (6.7 %) but not at 1 000 (7.8 %): at 1 000 it would need more time or faster code.
 Message: extra computing time does not help all algorithms equally.`);
@@ -691,7 +691,7 @@ Message: extra computing time does not help all algorithms equally.`);
     ["sa", `${pct(sa(big).vs_bound, 0)} above LB`,
       `At 10 000: ${fmt(sa(big).routes)} trucks. 14 million moves are 1 400 per customer: its cooling ends long before the plan is good.`],
     ["grasp", "no plan",
-      `One iteration fills the budget: ${fmt(g(2000).seconds)} s at 2 000, ${fmt(g(5000).seconds)} s at 5 000 (budget 60 s). At 10 000 the observed run passed 684 s on a 300 s budget without a plan; we stopped it.`],
+      `Construction plus first descent: 2 s at 1 000, 10 s at 2 000, 133 s at 5 000 (budget 60 s). At 10 000 the run passed 684 s on a 300 s budget with no plan; we stopped it.`],
   ];
   rows.forEach(([a, head, body], i) => {
     const y = 1.7 + i * 1.72;
@@ -705,14 +705,14 @@ No published optimum exists, so the reference is a lower bound. Bottom left: LB 
 Chart: at 1 000 GRASP-ILS and Tabu tie (about 46 %); from 2 000 Tabu pulls ahead and gets closer to the bound as n grows (36, 26, 19 %); SA falls behind.
 Tabu: 18.6 % above LB with 553 trucks, the minimum; its sampled neighbor lists keep an iteration at 1 to 2 ms whatever n.
 SA: 84 % above LB; too few moves per customer.
-GRASP-ILS: its first iteration alone takes 60 s at 2 000 and 125 s at 5 000, twice the budget. At 10 000 the observed run passed 684 s on a 300 s budget without returning a plan, and we stopped it. Reason: it checks the clock only between iterations. This is a defect of the tested code; no fix was run; all numbers here come from the original code.`);
+GRASP-ILS: its construction plus first descent takes about 2 s at 1 000 customers, 10 s at 2 000, and 133 s at 5 000, more than the 60 s budget. At 10 000 the observed run passed 684 s on a 300 s budget without returning a plan, and we stopped it. Reason: it checks the clock only between iterations. This is a defect of the tested code; no fix was run; all numbers here come from that code. These instances are symmetric, so the 2-opt bug of slide 14 does not apply here.`);
 }
 
-// ================================================================== 14. real cities
+// ================================================================== 14. real cities, no windows
 {
-  const s = content("On real roads without windows, Tabu Search wins", "Round 2");
+  const s = content("Real roads without windows: GRASP-ILS leads at 60 s", "Round 2");
   kicker(s, "Paris and São Paulo");
-  tags(s, ["RRNCO / OpenStreetMap", "999 real customers", "NO time windows", "objective: distance (km)", "60 s", "5 seeds"]);
+  tags(s, ["RRNCO / OpenStreetMap", "999 real customers", "no time windows", "objective: distance (km)", "60 s", "5 seeds"]);
   const cities = ["Paris", "Sao_Paulo"];
   s.addChart(pres.charts.BAR, ORDER.map((a) => ({ name: ALG[a].name, labels: ["Paris", "São Paulo"], values: cities.map((c) => city(c, "distance", a).mean) })), {
     x: MX, y: 1.7, w: 6.4, h: 3.75, barDir: "col", barGapWidthPct: 60, chartColors: ORDER.map((a) => ALG[a].color),
@@ -720,17 +720,17 @@ GRASP-ILS: its first iteration alone takes 60 s at 2 000 and 125 s at 5 000, twi
     showValue: true, dataLabelPosition: "outEnd", dataLabelFormatCode: "0", valAxisMinVal: 0, ...chartText, titleFontSize: 12,
     showValAxisTitle: true, valAxisTitle: "km", valAxisTitleColor: K.soft, valAxisTitleFontSize: 10,
   });
-  const dur = (c, a) => city(c, "duration 08:00", a).mean;
-  card(s, MX, 5.55, 6.4, 1.3, K.creamDeep);
+  card(s, MX, 5.55, 6.4, 1.3, "FBE3DC");
   T(s, [
-    { text: "Why km here, if the model minimizes duration? ", options: { bold: true } },
-    { text: `SA's solver has the distance objective only, so all three compete on km. With the duration objective and traffic (Tabu and GRASP-ILS, leaving at 08:00) the order is the same: Paris ${fmt(dur("Paris", "tabu"))} vs ${fmt(dur("Paris", "grasp"))} min, São Paulo ${fmt(dur("Sao_Paulo", "tabu"))} vs ${fmt(dur("Sao_Paulo", "grasp"))} min.` },
+    { text: "Correction after the review: ", options: { bold: true, color: K.verm } },
+    { text: "our GRASP-ILS computed the 2-opt gain as if A → B cost the same as B → A. On one-way streets its descent cycled and wasted the minute. Fixed and rerun: a construction plus descent now takes about 2 s instead of the whole minute. Only these asymmetric city runs were affected." },
   ], { x: MX + 0.2, y: 5.62, w: 6.0, h: 1.18, fontSize: 11 });
   const ctl = (c, a, t, k) => S.cities.control.find((r) => r.city === c && r.algorithm === a && r.time_limit === t && (k === undefined || r.kicks === k));
+  const dev = (c, a) => 100 * (city(c, "distance", a).mean / bestAll(c) - 1);
   const why = [
-    ["No windows: construction matters less", "Any truck can take any customer. What counts is the number of improving moves: Tabu makes about 30 000 iterations in 60 s, GRASP-ILS one."],
-    ["GRASP-ILS never reaches its kicks", `Run with 0, 10 or 30 kicks: identical result (${fmt(ctl("Paris", "grasp", 60, 0).mean, 1)} km in Paris). The first construction and descent fill the 60 s.`],
-    ["Five times the time: same order", `300 s in Paris: Tabu ${fmt(ctl("Paris", "tabu", 300).mean, 0)} km, GRASP-ILS ${fmt(ctl("Paris", "grasp", 300, 90).mean, 0)} km. In São Paulo GRASP-ILS does not improve at all.`],
+    ["Same order as Solomon", `Above the best plan of all runs: GRASP-ILS ${pct(dev("Paris", "grasp"))} and ${pct(dev("Sao_Paulo", "grasp"))}, Tabu Search ${pct(dev("Paris", "tabu"))} and ${pct(dev("Sao_Paulo", "tabu"))}, SA ${pct(dev("Paris", "sa"), 0)} and ${pct(dev("Sao_Paulo", "sa"), 0)}.`],
+    ["The perturbations do the work", `Paris at 60 s with P = 0, 10, 30 perturbations: ${fmt(ctl("Paris", "grasp", 60, 0).mean, 0)}, ${fmt(ctl("Paris", "grasp", 60, 10).mean, 0)}, ${fmt(ctl("Paris", "grasp", 60, 30).mean, 0)} km. Plain GRASP is far behind.`],
+    ["Five times the time", `300 s in Paris: Tabu ${fmt(ctl("Paris", "tabu", 300).mean, 0)} km, GRASP-ILS ${fmt(ctl("Paris", "grasp", 300, 90).mean, 0)} km (a tie); São Paulo: GRASP-ILS ${fmt(ctl("Sao_Paulo", "grasp", 300, 90).mean, 0)}, Tabu ${fmt(ctl("Sao_Paulo", "tabu", 300).mean, 0)} km.`],
   ];
   why.forEach(([h, b], i) => {
     const y = 1.7 + i * 1.38;
@@ -739,17 +739,68 @@ GRASP-ILS: its first iteration alone takes 60 s at 2 000 and 125 s at 5 000, twi
     T(s, b, { x: 7.45, y: y + 0.45, w: 5.1, h: 0.78, fontSize: 11.5, color: K.soft });
   });
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 7.25, y: 5.95, w: 5.45, h: 0.9, fill: { color: K.navy }, line: { color: K.navy }, rectRadius: 0.08 });
-  T(s, "Takeaway: the best algorithm depends on the scenario. Windows: GRASP-ILS. Large real roads without windows: Tabu Search.",
+  T(s, "France and Brazil rank the algorithms the same way; São Paulo costs more because its trips are longer and more circuitous.",
     { x: 7.45, y: 6.0, w: 5.1, h: 0.8, fontSize: 12, bold: true, color: K.white, valign: "middle" });
   s.addNotes(`DAG (about 1.5 min).
-Setup: 999 real customers in Paris and in Sao Paulo, road matrices from the RRNCO dataset (OpenStreetMap, shortest paths), no time windows, capacity only; 60 s, 5 seeds. The chart is the total distance in km, lower is better.
-"Why km, if our model minimises duration? Because the SA solver only has the distance objective; to compare all three on the same metric we use km. We also ran the duration objective with traffic for Tabu and GRASP-ILS: same order, Tabu ahead (Paris 1 831 vs 2 390 min at 8:00)."
-Why Tabu wins here, opposite to Solomon: without windows any truck can take any customer, so a clever construction matters less, and what counts is how many improving moves you make: Tabu does about 30 000 iterations in 60 s, GRASP-ILS one.
-Control experiment: GRASP-ILS with 0, 10 or 30 kicks gives the exact same plan, because its first construction plus descent already uses the whole minute. With 300 s it improves in Paris (357.5 to 344.7 km) but not in Sao Paulo, and Tabu still leads.
-Every plan uses the minimum 57 trucks, so the difference is pure routing. Ranking identical in both countries; Sao Paulo costs more because its trips are longer and more circuitous.`);
+Setup: 999 real customers in Paris and Sao Paulo, road matrices from RRNCO (OpenStreetMap, shortest paths), capacity only, distance objective in km, 60 s, 5 seeds.
+Correction, say it first: "In our first version Tabu Search won here. Reviewing the project we found a bug in our GRASP-ILS: its 2-opt computed the gain as if the matrix were symmetric. On one-way streets, A to B and B to A differ, so the descent applied false improvements and cycled until a cap of 100 000 moves. We fixed it, added a test, and reran: a construction plus descent now takes about 2 s instead of the whole minute. Solomon, Homberger and the synthetic instances are symmetric, so they are not affected."
+Result: same order as on Solomon. GRASP-ILS about 2 to 3 % above the best plan of all runs, Tabu 5 to 10 %, SA about 32 %.
+Control: with 0, 10, 30 perturbations per iteration GRASP-ILS gives 361, 335, 330 km in Paris: the perturbations are what make it strong. With 300 s Tabu and GRASP-ILS tie in Paris; GRASP-ILS stays ahead in Sao Paulo.
+Same ranking in both countries; Sao Paulo costs more because its trips are longer (2.62 vs 2.49 km) and more circuitous (1.65 vs 1.51).`);
 }
 
-// ================================================================== 15. night
+// ================================================================== 15. real cities with time windows
+{
+  const s = content("The same time windows on real roads", "Round 2");
+  kicker(s, "Paris and São Paulo  |  answer to the review");
+  tags(s, ["999 real customers", "windows: 120 min, 8:00 to 18:00", "service 5 min", "60 s", "5 seeds", "vs best of all runs"]);
+  const w = (c, o, a) => city(c, o, a);
+  const devw = (c, o, a) => {
+    const best = Math.min(...S.cities.costs.filter((r) => r.city === c && r.objective === o).map((r) => r.best));
+    return 100 * (w(c, o, a).mean / best - 1);
+  };
+  // left: CVRPTW, three algorithms
+  card(s, MX, 1.7, 6.0, 3.05);
+  T(s, "A. CVRPTW on real roads (ρ = 1)", { x: MX + 0.2, y: 1.78, w: 5.6, h: 0.3, fontSize: 13.5, bold: true });
+  T(s, "objective: total free-flow travel time (min); all three algorithms", { x: MX + 0.2, y: 2.08, w: 5.6, h: 0.28, fontSize: 11, color: K.soft });
+  const tA = [["% above best run", "Paris", "São Paulo"]].concat(ORDER.map((a) => [ALG[a].name, pct(devw("Paris", "time + windows", a)), pct(devw("Sao_Paulo", "time + windows", a))]));
+  s.addTable(tA.map((r, i) => r.map((c, j) => ({ text: c, options: { bold: i === 0 || j === 0, fontSize: 12, fontFace: "Calibri",
+    color: i === 0 ? K.white : (j === 0 ? ALG[ORDER[i - 1]].color : K.navy), fill: { color: i === 0 ? K.navy : K.white }, align: j ? "right" : "left", valign: "middle" } }))),
+  { x: MX + 0.2, y: 2.45, w: 5.6, colW: [2.4, 1.6, 1.6], rowH: 0.36, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
+  T(s, "With windows the regret construction decides again: GRASP-ILS leads, as on Solomon and Homberger.", { x: MX + 0.2, y: 4.0, w: 5.6, h: 0.65, fontSize: 11.5, bold: true, color: K.cobalt });
+  // right: full model
+  card(s, 6.7, 1.7, 6.0, 3.05);
+  T(s, "B. The full model: windows + hourly traffic", { x: 6.9, y: 1.78, w: 5.6, h: 0.3, fontSize: 13.5, bold: true });
+  T(s, "objective: total route duration z (min), trucks leave at 08:00", { x: 6.9, y: 2.08, w: 5.6, h: 0.28, fontSize: 11, color: K.soft });
+  const pil = (c, a) => S.pilot.find((r) => r.city === c && r.algorithm === a);
+  const tB = [["% above best run", "999: Paris", "999: S. Paulo", "300: Paris", "300: S. Paulo"]].concat(["tabu", "grasp"].map((a) => [ALG[a].name,
+    pct(devw("Paris", "duration 08:00 + windows", a)), pct(devw("Sao_Paulo", "duration 08:00 + windows", a)),
+    pct(100 * (pil("Paris", a).mean / Math.min(pil("Paris", "tabu").best, pil("Paris", "grasp").best) - 1)),
+    pct(100 * (pil("Sao_Paulo", a).mean / Math.min(pil("Sao_Paulo", "tabu").best, pil("Sao_Paulo", "grasp").best) - 1))]));
+  s.addTable(tB.map((r, i) => r.map((c, j) => ({ text: c, options: { bold: i === 0 || j === 0, fontSize: 11, fontFace: "Calibri",
+    color: i === 0 ? K.white : (j === 0 ? ALG[i === 1 ? "tabu" : "grasp"].color : K.navy), fill: { color: i === 0 ? K.navy : K.white }, align: j ? "right" : "left", valign: "middle" } }))),
+  { x: 6.9, y: 2.45, w: 5.6, colW: [1.6, 1.0, 1.0, 1.0, 1.0], rowH: 0.36, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
+  T(s, "With traffic Tabu Search leads at both sizes. GRASP-ILS recomputes the duration of every candidate route: its construction and descent take 30.8 s instead of 1.9 s at 999 customers, so few perturbations fit in 60 s.",
+    { x: 6.9, y: 3.75, w: 5.6, h: 0.95, fontSize: 11.5, bold: true, color: K.ochre });
+  // bottom
+  card(s, MX, 4.95, 6.0, 1.9, K.creamDeep);
+  T(s, [
+    { text: "How the windows are drawn\n", options: { bold: true, fontSize: 12.5 } },
+    { text: "Depot open 08:00 to 18:00. Each customer i gets [e_i, e_i + 120 min], e_i uniform in the day, 5 min of service. A window never closes before a truck leaving at 08:00 at peak traffic (ρ = 1.80) can reach it, so every customer can be served alone: the instance is feasible. Same rule, same seed, both cities.", options: { fontSize: 11 } },
+  ], { x: MX + 0.2, y: 5.03, w: 5.6, h: 1.78 });
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 6.7, y: 4.95, w: 6.0, h: 1.9, fill: { color: K.navy }, line: { color: K.navy }, rectRadius: 0.08 });
+  T(s, [
+    { text: "What it adds\n", options: { bold: true, fontSize: 12.5, color: "F2A08A" } },
+    { text: `Routes now last about ${fmt(w("Paris", "duration 08:00 + windows", "tabu").mean / w("Paris", "duration 08:00 + windows", "tabu").routes / 60, 1)} h, and ${fmt(w("Paris", "duration 08:00 + windows", "tabu").multi_hour, 0)} of ${fmt(w("Paris", "duration 08:00 + windows", "tabu").routes, 0)} routes drive in several traffic hours: this is the test the night experiment could not give. The winner depends on the objective: static with windows, GRASP-ILS; time-dependent, Tabu Search.`, options: { fontSize: 11, color: K.white } },
+  ], { x: 6.9, y: 5.03, w: 5.6, h: 1.78 });
+  s.addNotes(`DAG (about 2 min). This slide answers the professor's review: "you designed the time windows, why not use them in Paris and Sao Paulo?"
+How the windows are drawn: the same generator as our model. Depot open 08:00 to 18:00; each customer gets a 120-minute window starting at a uniform time in the day; 5 minutes of service; and no window closes before a truck leaving at 08:00 in peak traffic can arrive, so every customer is reachable alone and the instance is feasible. Same rule and seed in both cities.
+A, left: the CVRPTW on real roads with free-flow times, all three algorithms. GRASP-ILS leads (about 3 % above the best run), Tabu 7 to 10 %, SA 21 to 23 %. With windows, the regret construction decides again, as on Solomon and Homberger.
+B, right: the full model of slide 4: windows AND hourly traffic, duration objective, trucks leave at 08:00. SA has no traffic mode, so Tabu and GRASP-ILS only. Tabu leads both at 999 customers and at 300, the size of the ADEME pilot. Reason, measured: with traffic GRASP-ILS recomputes the exact duration of every candidate route in pure Python; one construction plus descent takes 30.8 s instead of 1.9 s at 999 customers (2.7 s instead of 0.2 s at 300), so few perturbations fit in the minute. Tabu Search samples 200 moves per step and caches route costs.
+What it adds: routes now last several hours and every route drives through several traffic periods, which the night experiment could not test. Conclusion: the best algorithm depends on the objective. Static with windows: GRASP-ILS. With hourly traffic: Tabu Search, as implemented.`);
+}
+
+// ================================================================== 16. night
 {
   const p = night("Paris"), sp = night("Sao_Paulo");
   const s = content(`Leaving at 22:00 instead of 08:00: ${fmt(p.cut, 1)} % less time on the road`, "Round 2");
@@ -780,7 +831,7 @@ What it shows: how big the traffic effect is under our assumption. What it does 
 Also: the profile is assumed, and night delivery has other costs (noise, wages) the model does not price.`);
 }
 
-// ================================================================== 16. sensitivity
+// ================================================================== 17. sensitivity
 {
   const s = content("Each algorithm has one parameter that can break it", "Round 2");
   kicker(s, "Sensitivity analysis");
@@ -789,7 +840,7 @@ Also: the profile is assumed, and night delivery has other costs (noise, wages) 
     { x: MX, y: 1.7, w: 12.1, h: 0.45, fontSize: 12.5 });
   const panels = [
     ["tabu", "candidates", "Tabu Search: candidate list size", "moves sampled per iteration", 200],
-    ["grasp", "perturb_kicks", "GRASP-ILS: kicks per iteration", "kicks per iteration", 90],
+    ["grasp", "perturb_kicks", "GRASP-ILS: perturbations per iteration", "perturbations P per iteration", 90],
     ["sa", "initial_temperature_factor", "SA: initial temperature factor", "T₀ / start cost", 0.005],
   ];
   const sv = (a, p, v) => (S.sensitivity[a] || []).find((r) => r.parameter === p && r.value === v);
@@ -805,7 +856,7 @@ Also: the profile is assumed, and night delivery has other costs (noise, wages) 
   });
   const reads = [
     ["tabu", `25: ${pct(sv("tabu", "candidates", 25).mean_gap)} (step almost random). 200: ${pct(sv("tabu", "candidates", 200).mean_gap)}. 800: ${pct(sv("tabu", "candidates", 800).mean_gap)} (each step 14 times slower than with 25, so far fewer steps). More is not better.`],
-    ["grasp", `0 kicks (plain GRASP): ${pct(sv("grasp", "perturb_kicks", 0).mean_gap)}; 90: ${pct(sv("grasp", "perturb_kicks", 90).mean_gap)}. The kicks halve the gap: the ILS part is what makes it win.`],
+    ["grasp", `P = 0 (plain GRASP): ${pct(sv("grasp", "perturb_kicks", 0).mean_gap)}; P = 90: ${pct(sv("grasp", "perturb_kicks", 90).mean_gap)}. The perturbations halve the gap: the ILS part is what makes it win.`],
     ["sa", `Flat from 0.001 to 0.05 (${pct(sv("sa", "initial_temperature_factor", 0.0025).mean_gap, 2)} to ${pct(sv("sa", "initial_temperature_factor", 0.001).mean_gap, 2)}). Only near 0 (0.0005: ${pct(sv("sa", "initial_temperature_factor", 0.0005).mean_gap)}) it breaks: no worse move accepted, a plain descent.`],
   ];
   reads.forEach(([a, b], i) => {
@@ -816,52 +867,67 @@ Also: the profile is assumed, and night delivery has other costs (noise, wages) 
   s.addNotes(`DAG (about 1.5 min); each author can comment their own curve.
 "Sensitivity analysis: we take the tuned setting, change ONE parameter over a range, keep all others fixed, and measure the mean gap on the 6 tuning instances (3 seeds, 20 s). It tells us how fragile each choice is." The dot marks the value used in the campaign.
 Tabu, candidate list size: 25 sampled moves give 20 %, because the best of 25 random moves is almost a random step; 200 gives 2.1 %; 800 gives 7.9 %, because each iteration is 14 times slower than with 25, so in 20 s it makes far fewer steps. A U shape: more is not always better.
-GRASP-ILS, kicks: without kicks (plain GRASP) 2.5 %; with 90, 1.34 %. The kicks are what make it better.
+GRASP-ILS, perturbations P: without them (plain GRASP) 2.5 %; with 90, 1.34 %. The perturbations are what make it better.
 SA, initial temperature: flat between 0.55 and 0.83 % over two orders of magnitude; it breaks only when T0 tends to 0 (2.1 %), because it then accepts no worse move and becomes a descent. SA is the most robust.
 Other findings (in the notebook): Tabu tenure 35 would be better than 20 (1.43 vs 2.06 %), GRASP alpha 0.7 better than 0.3 (1.02 vs 1.34 %). We did not retune: the campaign was fixed before, and it would not change the ranking.`);
 }
 
-// ================================================================== 17. recommendation
+// ================================================================== 18. recommendation
 pres.addSection({ title: "Recommendation" });
+// % above the best run of a city objective (all algorithms, seeds and budgets of that objective)
+const devCity = (c, o, a) => {
+  const best = Math.min(...S.cities.costs.filter((r) => r.city === c && r.objective === o).map((r) => r.best),
+    ...(o === "distance" ? S.cities.control.filter((r) => r.city === c).map((r) => r.best) : []));
+  return 100 * (city(c, o, a).mean / best - 1);
+};
+const pilotGap = (c, a) => {
+  const p = (x) => S.pilot.find((r) => r.city === c && r.algorithm === x);
+  return 100 * (p(a).mean / Math.min(p("tabu").best, p("grasp").best) - 1);
+};
+const range2 = (f) => `${pct(Math.min(f("Paris"), f("Sao_Paulo")))} to ${pct(Math.max(f("Paris"), f("Sao_Paulo")))}`;
 {
-  const s = content("No universal winner: the choice depends on windows and size", "Recommendation");
+  const s = content("No universal winner: it depends on windows, traffic and size", "Recommendation");
   kicker(s, "Our recommendation, scenario by scenario");
   s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: MX, y: 1.4, w: 12.1, h: 0.75, fill: { color: K.navy }, line: { color: K.navy }, rectRadius: 0.08 });
   T(s, [
-    { text: "For the ADEME pilot  ", options: { bold: true, color: "AEB8E6", fontSize: 13, charSpacing: 2 } },
-    { text: "GRASP-ILS", options: { bold: true, color: K.white, fontSize: 20, fontFace: "Cambria" } },
-    { text: "   the brief is a CVRPTW: time windows, one depot, a few hundred deliveries.", options: { color: "DCE3F7", fontSize: 14 } },
+    { text: "ADEME pilot (windows + hourly traffic)  ", options: { bold: true, color: "AEB8E6", fontSize: 12.5 } },
+    { text: "Tabu Search", options: { bold: true, color: K.white, fontSize: 19, fontFace: "Cambria" } },
+    { text: "      static CVRPTW (distance or free-flow time)  ", options: { bold: true, color: "AEB8E6", fontSize: 12.5 } },
+    { text: "GRASP-ILS", options: { bold: true, color: K.white, fontSize: 19, fontFace: "Cambria" } },
   ], { x: MX + 0.3, y: 1.45, w: 11.5, h: 0.65, valign: "middle" });
   const rec = [
-    ["About 100 customers, time windows", "grasp", `${pct(sol.grasp.mean, 2)} mean gap on 500 runs, significantly ahead`, "Solomon"],
+    ["About 100 customers, windows, distance", "grasp", `${pct(sol.grasp.mean, 2)} mean gap on 500 runs, significantly ahead`, "Solomon"],
     ["100 customers, a bad run is not acceptable", "sa", `best worst case (${pct(sol.sa.worst)}), every run within 7 %; robust to its parameters`, "Solomon, sensitivity"],
-    ["400 to 1 000 customers, time windows", "grasp", `lowest gap at every size and budget; ${pct(hom("grasp", 1000, 120).gap)} at 1 000 with 120 s`, "Homberger"],
-    ["About 1 000 customers, real roads, no windows", "tabu", `${pct(100 * (city("Paris", "distance", "tabu").mean / bestAll("Paris") - 1), 0)} to ${pct(100 * (city("Sao_Paulo", "distance", "tabu").mean / bestAll("Sao_Paulo") - 1), 0)} from the best plan found, GRASP-ILS ${pct(100 * (city("Paris", "distance", "grasp").mean / bestAll("Paris") - 1), 0)} to ${pct(100 * (city("Sao_Paulo", "distance", "grasp").mean / bestAll("Sao_Paulo") - 1), 0)}`, "Paris, São Paulo"],
-    ["2 000 to 10 000 customers, no windows", "tabu", `ahead from 2 000; ${S.synthetic.tabu ? pct(S.synthetic.tabu.vs_bound) : "n/a"} above the lower bound at 10 000; GRASP-ILS returns no plan`, "Synthetic"],
+    ["400 to 1 000 customers, windows, distance", "grasp", `lowest gap at every size and budget; ${pct(hom("grasp", 1000, 120).gap)} at 1 000 with 120 s`, "Homberger"],
+    ["999 real customers, windows, free-flow time", "grasp", `${range2((c) => devCity(c, "time + windows", "grasp"))} above the best run; Tabu ${range2((c) => devCity(c, "time + windows", "tabu"))}`, "Paris, São Paulo"],
+    ["999 real customers, no windows, km", "grasp", `${range2((c) => devCity(c, "distance", "grasp"))} above the best run; Tabu ${range2((c) => devCity(c, "distance", "tabu"))}`, "Paris, São Paulo"],
+    ["300 or 999 real customers, windows + hourly traffic", "tabu", `${range2((c) => pilotGap(c, "tabu"))} above the best run at 300; GRASP-ILS ${range2((c) => pilotGap(c, "grasp"))}`, "Paris, São Paulo"],
+    ["2 000 to 10 000 customers, no windows", "tabu", `ahead from 2 000; ${pct(S.synthetic.tabu.vs_bound)} above the lower bound at 10 000`, "Synthetic"],
   ];
   const rows = [["Scenario", "Choose", "Because (our data)", "Evidence"]].concat(rec.map((r) => [r[0], ALG[r[1]].name, r[2], r[3]]));
-  s.addTable(rows.map((r, i) => r.map((c, j) => ({ text: c, options: { fontSize: 11.5, fontFace: "Calibri", valign: "middle",
+  s.addTable(rows.map((r, i) => r.map((c, j) => ({ text: c, options: { fontSize: 11, fontFace: "Calibri", valign: "middle",
     bold: i === 0 || j === 1, color: i === 0 ? K.white : (j === 1 ? ALG[rec[i - 1][1]].color : (j === 3 ? K.soft : K.navy)),
     fill: { color: i === 0 ? K.navy : (i % 2 ? K.white : "F8F5EE") } } }))),
-  { x: MX, y: 2.3, w: 12.1, colW: [3.35, 1.95, 5.1, 1.7], rowH: 0.46, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
-  card(s, MX, 5.25, 5.95, 1.6, K.creamDeep);
+  { x: MX, y: 2.28, w: 12.1, colW: [3.75, 1.85, 4.85, 1.65], rowH: 0.4, border: { type: "solid", color: "E3DCCB", pt: 0.5 } });
+  card(s, MX, 5.75, 5.95, 1.1, K.creamDeep);
   T(s, [
-    { text: "Why no single winner\n", options: { bold: true, fontSize: 12.5 } },
-    { text: "Windows make the construction decisive: GRASP-ILS's regret start wins. Without windows, improving moves per second decide: Tabu Search's cheap iterations win.", options: { fontSize: 11.5 } },
-  ], { x: MX + 0.2, y: 5.33, w: 5.6, h: 1.48 });
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 6.75, y: 5.25, w: 5.95, h: 1.6, fill: { color: "FBE3DC" }, line: { color: K.verm }, rectRadius: 0.08 });
+    { text: "Why no single winner: ", options: { bold: true } },
+    { text: "with a static objective and windows, the regret construction and perturbations win (GRASP-ILS). When the duration depends on the hour, or n is very large, cheap iterations win (Tabu Search)." },
+  ], { x: MX + 0.2, y: 5.8, w: 5.6, h: 1.0, fontSize: 11 });
+  s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: 6.75, y: 5.75, w: 5.95, h: 1.1, fill: { color: "FBE3DC" }, line: { color: K.verm }, rectRadius: 0.08 });
   T(s, [
-    { text: "Caveats\n", options: { bold: true, fontSize: 12.5, color: K.verm } },
-    { text: "We did not test 10 000 customers with time windows (windows stop at 1 000). The switch to Tabu Search above 2 000 customers comes from runs without windows, not from a large CVRPTW.", options: { fontSize: 11.5 } },
-  ], { x: 6.95, y: 5.33, w: 5.6, h: 1.48 });
+    { text: "Caveats: ", options: { bold: true, color: K.verm } },
+    { text: "no 10 000-customer test with windows; ρ(h) is assumed; the traffic verdict holds for our pure Python code at 60 s (with traffic, GRASP-ILS construction and descent are about 15 times slower)." },
+  ], { x: 6.95, y: 5.8, w: 5.6, h: 1.0, fontSize: 11 });
   s.addNotes(`DAG (about 1.5 min).
-"Our recommendation is a rule, not one winner. For the ADEME pilot, which is a CVRPTW with a few hundred deliveries per depot, we choose GRASP-ILS."
-Read the table: around 100 customers with windows, GRASP-ILS (1.16 % on 500 runs). If one bad run is not acceptable, SA, whose worst run is the best of the three and which is robust to its parameters. 400 to 1 000 with windows, GRASP-ILS. Real roads without windows around 1 000, Tabu. 2 000 to 10 000 without windows, Tabu.
-Why no universal winner: with windows, the start decides, and GRASP-ILS builds the best start. Without windows, what decides is the number of improving moves per second, where Tabu wins.
-Caveats, read them aloud: no 10 000-customer test with windows; the 'above 2 000 customers' switch comes from the synthetic runs without windows. For a large CVRPTW we would expect GRASP-ILS's construction to matter, if made fast enough; not tested.`);
+"Our recommendation is a rule, not one winner, and the round 2 data changed it."
+Banner: for the ADEME pilot, which has time windows AND hourly traffic with a few hundred deliveries, we recommend Tabu Search: on real roads with the full model it is ahead both at 300 and at 999 customers. For the static CVRPTW, distance or free-flow time with windows, GRASP-ILS wins everywhere we tested: Solomon, Homberger up to 1 000, and both cities.
+Table, row by row: 100 customers with windows, GRASP-ILS. If one bad run is not acceptable, SA. 400 to 1 000 with windows, GRASP-ILS. Real roads with windows (free-flow time) and without windows (km), GRASP-ILS. Real roads with windows and traffic, Tabu. 2 000 to 10 000 without windows, Tabu.
+Why: with a static objective, the regret construction plus perturbations is the best search. With traffic, GRASP-ILS re-evaluates every move with the exact time-dependent duration in pure Python: its construction and descent become about 15 times slower (30.8 s against 1.9 s at 999 customers), so few perturbations fit in the minute. At very large n, the same: cheap iterations win.
+Caveats: no 10 000 test with windows; the traffic profile is assumed; the traffic verdict is for our implementations at 60 s. A faster time-dependent evaluation for GRASP-ILS could change it.`);
 }
 
-// ================================================================== 18. limits
+// ================================================================== 19. limits
 {
   const s = content("What we did not solve, and what it means for the results", "Recommendation");
   kicker(s, "Limitations  |  transparency");
@@ -874,8 +940,8 @@ Caveats, read them aloud: no 10 000-customer test with windows; the 'above 2 000
       "Our durations can only be equal to or worse than what the model allows: trucks cannot stagger to avoid the peak."],
     ["First in, first out not guaranteed", "Each trip is priced by its departure hour. 60 min free-flow: leave 08:59, ρ 1.80, arrive 10:47; leave 09:00, ρ 1.40, arrive 10:24.",
       "Waiting can pay off artificially at an hour boundary. Splitting trips at the full hour removes it."],
-    ["GRASP-ILS overran its budget", "It reads the clock only between iterations: at 10 000 customers the run passed 684 s on a 300 s budget with no plan.",
-      "All reported results use this original code. A fix (clock checks inside construction and descent) is proposed, not run."],
+    ["GRASP-ILS: one bug fixed, one defect left", "Its 2-opt assumed A → B = B → A: fixed, city runs redone. It reads the clock only between iterations: 684 s on a 300 s budget at 10 000.",
+      "The clock defect is not fixed; the 5 000 and 10 000 results use that code. A fix (clock checks inside construction and descent) is proposed, not run."],
     ["Brazil instead of Egypt", "Validated open road matrices existed for Paris and São Paulo; Cairo needed an OSM extraction we could not validate in time.",
       "Two countries, same protocol, but not the pair requested; no graph metrics (density, degree)."],
   ];
@@ -892,20 +958,20 @@ Caveats, read them aloud: no 10 000-customer test with windows; the 'above 2 000
 2. Implementation: SA is compiled with Numba, the other two are pure Python. Same machine, same evaluator, same wall-clock budget, but not the same code speed. SA still comes second on Solomon.
 3. One departure per fleet: the model allows a departure per truck; our metaheuristics fix one for all. So our durations are an upper bound of what the model permits; a 1-D search of the departure per route would close it.
 4. FIFO: travel time depends only on the departure hour. Example: a 60-minute free-flow trip leaving at 8:59 is priced at 1.80, arrives 10:47; leaving at 9:00 is priced at 1.40, arrives 10:24. Leaving later arrives earlier. Fix: split each trip at the full hour.
-5. GRASP-ILS budget overrun: the clock is read only between iterations; at 10 000 customers one iteration is longer than the budget. All results come from that original code; the fix is proposed, not implemented or tested.
+5. GRASP-ILS: one bug fixed, one defect left. The 2-opt gain assumed a symmetric matrix; on one-way streets the descent cycled; we fixed it, added a test and redid every city run. The clock is read only between iterations; at 10 000 customers the construction and descent are longer than the budget. That defect is not fixed; the fix is proposed, not implemented or tested.
 6. Brazil replaces Egypt: open validated matrices; same protocol.`);
 }
 
-// ================================================================== 19. close
+// ================================================================== 20. close
 {
   const s = pres.addSlide({ masterName: "DARK", sectionTitle: "Recommendation" });
   T(s, "IN ONE SLIDE", { x: MX, y: 0.5, w: 6, h: 0.3, fontSize: 12, bold: true, color: "AEB8E6", charSpacing: 3 });
-  T(s, "GRASP-ILS for the time-window ADEME pilot; Tabu Search for very large instances without windows",
+  T(s, "GRASP-ILS for routing with time windows; Tabu Search when traffic makes travel times depend on the hour",
     { x: MX, y: 0.85, w: 12.1, h: 1.2, fontFace: "Cambria", fontSize: 28, bold: true, color: K.white });
   const big = [
     [pct(sol.grasp.mean, 2), "GRASP-ILS mean gap", ["Solomon", "100 customers", "windows", "20 s", "vs best known"]],
-    [pct(hom("grasp", 1000, 120).gap), "GRASP-ILS gap", ["Homberger", "1 000 customers", "windows", "120 s", "vs best known"]],
-    [pct(S.synthetic.tabu.vs_bound), "Tabu Search above the lower bound", ["Synthetic", "10 000 customers", "no windows", "300 s", "vs radial LB"]],
+    [pct(Math.max(devCity("Paris", "time + windows", "grasp"), devCity("Sao_Paulo", "time + windows", "grasp"))), "GRASP-ILS on real roads, at most", ["Paris, São Paulo", "999 customers", "windows", "60 s", "vs best run"]],
+    [pct(Math.max(pilotGap("Paris", "tabu"), pilotGap("Sao_Paulo", "tabu"))), "Tabu Search, full model, at most", ["Paris, São Paulo", "300 customers", "windows + traffic", "60 s", "vs best run"]],
   ];
   big.forEach(([b, l, tg], i) => {
     const x = MX + i * 4.1;
@@ -915,9 +981,9 @@ Caveats, read them aloud: no 10 000-customer test with windows; the 'above 2 000
   });
   T(s, "Three different settings and references: these numbers are not comparable with each other.", { x: MX, y: 3.9, w: 12.1, h: 0.3, fontSize: 12, italic: true, color: "AEB8E6" });
   const qs = [
-    ["What we built", "A duration model with hourly traffic, an NP-hardness proof, an exact ILP, and three metaheuristics on one evaluator."],
-    ["What we learned", "Windows reward a good construction (GRASP-ILS); size without windows rewards cheap iterations (Tabu Search); SA is the most robust."],
-    ["What we recommend", "GRASP-ILS for the pilot. Tabu Search without windows at large n. Next: measured traffic, a regret start for Tabu, a faster GRASP-ILS."],
+    ["What we built", "A duration model with hourly traffic, an NP-hardness proof, an exact ILP, and three metaheuristics on one evaluator, tested from 100 to 10 000 customers."],
+    ["What we learned", "Windows reward a good construction and perturbations (GRASP-ILS); traffic and very large n reward cheap iterations (Tabu Search); SA is the most robust."],
+    ["What we recommend", "Tabu Search for the pilot with traffic, GRASP-ILS for static windows. Next: measured traffic, a faster time-dependent GRASP-ILS, a regret start for Tabu."],
   ];
   qs.forEach(([h, b], i) => {
     const x = MX + i * 4.1;
@@ -926,11 +992,13 @@ Caveats, read them aloud: no 10 000-customer test with windows; the 'above 2 000
     T(s, b, { x: x + 0.25, y: 4.88, w: 3.4, h: 1.3, fontSize: 12, color: K.white });
   });
   T(s, "Thank you. Questions?", { x: MX, y: 6.45, w: 8, h: 0.45, fontFace: "Cambria", fontSize: 20, italic: true, color: K.white });
-  s.addNotes(`PABLO (about 45 s).
-Three numbers, three DIFFERENT settings: 1.16 % is GRASP-ILS's mean gap to the best known values on 500 Solomon runs (100 customers, windows, 20 s). 7.8 % is GRASP-ILS on 1 000 customers with windows and 120 s, also against best known values. 18.6 % is Tabu Search above a lower bound, not a best known value, on 10 000 customers without windows. Do not compare them with each other.
-What we built: a model whose objective is the total route duration with hourly traffic, the NP-hardness proof, an exact ILP to check small cases, three metaheuristics on one shared evaluator.
-What we learned: time windows reward a good construction, so GRASP-ILS; large instances without windows reward cheap iterations, so Tabu Search; SA is the most robust to its parameters.
-What we recommend: GRASP-ILS for the ADEME pilot; Tabu Search for very large instances without windows. Then open questions. Q and A preparation: presentation/qa.md.`);
+  s.addNotes(`PABLO (about 1 min).
+Headline: "GRASP-ILS for routing with time windows; Tabu Search when traffic makes travel times depend on the hour."
+Three numbers, three DIFFERENT settings: 1.16 % is GRASP-ILS's mean gap to the best known values on 500 Solomon runs. The second is GRASP-ILS on the 999 real customers of Paris and Sao Paulo with time windows, at most that far above the best plan we found. The third is Tabu Search on 300 real customers with windows AND hourly traffic, the full model at the size of the ADEME pilot, at most that far above the best plan found. Do not compare them with each other.
+What we built: a model whose objective is the total route duration with hourly traffic, the NP-hardness proof, an exact ILP to check small cases, three metaheuristics on one shared evaluator, tested from 100 to 10 000 customers.
+What we learned: with windows and a static objective, the regret construction plus perturbations of GRASP-ILS wins; with traffic or at very large n, cheap iterations win, so Tabu Search; SA is the most robust to its parameters.
+What we recommend: Tabu Search for the ADEME pilot, which has traffic; GRASP-ILS for static routing with windows. Next steps: measured traffic, a faster time-dependent evaluation for GRASP-ILS, a regret start for Tabu Search.
+"Thank you. We are happy to take your questions."`);
 }
 
 (async () => {
