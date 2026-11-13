@@ -306,18 +306,27 @@ EQUATIONS = {
     "eq_traffic": r"$c^{h}_{ij} = \rho_h\, c_{ij}$",
     "eq_arrival": r"$a_j = t_i + s_i + \sum_h c^{h}_{ij}\, y_{ih}\quad$ if truck goes $i \to j$",
     "eq_gap": r"$\mathrm{gap} = 100\ \frac{\mathrm{cost} - \mathrm{BKS}}{\mathrm{BKS}}$",
+    "eq_lb": r"$LB = \frac{2}{Q} \sum_{i=1}^{n} d_{0i}\, q_i$",
 }
 
 
 def render_equations(color: str = NAVY) -> None:
-    """Formulas as transparent PNG (mathtext), so the slides show mathematics, not code."""
+    """Formulas as transparent PNG (mathtext), so the slides show mathematics, not code.
+
+    Each formula is written twice: navy for light slides, white (``*_white.png``) for dark boxes.
+    """
     for name, tex in EQUATIONS.items():
-        fig = plt.figure(figsize=(0.01, 0.01))
-        fig.text(0, 0, tex, fontsize=30, color=color, math_fontfamily="cm")
-        fig.savefig(
-            IMG / f"{name}.png", dpi=220, transparent=True, bbox_inches="tight", pad_inches=0.05
-        )
-        plt.close(fig)
+        for suffix, col in (("", color), ("_white", "#FFFFFF")):
+            fig = plt.figure(figsize=(0.01, 0.01))
+            fig.text(0, 0, tex, fontsize=30, color=col, math_fontfamily="cm")
+            fig.savefig(
+                IMG / f"{name}{suffix}.png",
+                dpi=220,
+                transparent=True,
+                bbox_inches="tight",
+                pad_inches=0.05,
+            )
+            plt.close(fig)
 
 
 def render(only: str | None = None) -> None:
