@@ -364,3 +364,41 @@ windows. The "switch to Tabu Search above 2 000" rule comes from those runs with
 **Is the traffic profile measured in Paris and São Paulo?**
 No. The road networks are real (RRNCO, OpenStreetMap, shortest paths). ρ(h) is our assumption, the
 same in both cities.
+
+## Intrinsic and extrinsic parameters
+
+**What is the difference?**
+Intrinsic parameters belong to the algorithm and we choose them: Tabu Search tenure, candidate list
+and neighbor list; SA initial temperature factor and final temperature; GRASP-ILS α, number of kicks
+and neighbor list. Extrinsic parameters belong to the scenario and the algorithm does not choose
+them: number of customers, time windows or not, clustered or random customers, Euclidean or real
+road network, country, time budget, departure hour and traffic.
+
+**How did you study each?**
+Intrinsic: one factor at a time around the tuned value, others fixed, 6 tuning instances, 3 seeds
+× 20 s, mean gap to the best known value (slide 16, notebook 9.5). Extrinsic: one experiment per
+factor, every algorithm with the same protocol: size (Homberger 400 to 1 000, synthetic up to
+10 000), windows (Homberger against synthetic and cities), class (Solomon C, R, RC), road network
+and country (Paris, São Paulo), budget (20, 60, 120 s), departure hour (08:00, 22:00).
+
+**Which intrinsic parameter matters most?**
+Tabu Search's candidate list: 25 candidates 20.0 %, 200 2.1 %, 800 7.9 %. Also its neighbor list
+(5: 11.9 %, 15: 2.1 %, 60: 23.3 %) and a tenure of 80 (13.3 %). GRASP-ILS: kicks (0: 2.50 %,
+90: 1.34 %). SA is flat between 0.55 and 0.83 % and breaks only when T₀ tends to 0 (2.13 %).
+
+**Which extrinsic factor changes the ranking?**
+Time windows. With windows GRASP-ILS wins at every size up to 1 000. Without windows Tabu Search
+ties it at 1 000 (synthetic) and wins from 2 000 and on both real road networks. Size alone
+widens the gaps; the budget changes the levels (SA gains most) but not the order; the country and
+the departure hour do not change the order.
+
+**Do the tuned intrinsic values still hold when the extrinsic factors change?**
+Not tested in general, and we say so: the tuning is at 100 customers. At 1 000 customers and more
+GRASP-ILS completes one or two iterations, so α and the number of kicks barely act; its result is
+the regret construction and one descent. For the scale study we kept Tabu at tenure 20 and 200
+candidates and used an SA initial factor of 0.01 instead of 0.005.
+
+**One factor at a time misses interactions. Why not a full design?**
+True: a tenure that works with 200 candidates may not work with 50. A full grid of 3 parameters
+with 6 to 7 values each is 200 to 350 settings per algorithm, times instances and seeds. We chose
+breadth (every parameter of every algorithm) and state the interaction as a limitation.
