@@ -644,10 +644,14 @@ class _LocalSearch:
         ru, i = st.where[u]
         p = st.routes[ru].path
         # Reverse p[i+1..j]: edges (u, p[i+1]), (p[j], p[j+1]) become (u, p[j]), (p[i+1], p[j+1]).
+        # The arcs inside the segment are driven backwards; on an asymmetric matrix (one-way
+        # streets) their cost changes too, so ``inner`` adds it (it is 0 when D is symmetric).
         un = p[i + 1]
+        inner = 0.0
         for j in range(i + 2, len(p) - 1):
             w, wn = p[j], p[j + 1]
-            delta = D[u][w] + D[un][wn] - D[u][un] - D[w][wn]
+            inner += D[w][p[j - 1]] - D[p[j - 1]][w]
+            delta = D[u][w] + D[un][wn] - D[u][un] - D[w][wn] + inner
             if delta >= -EPS:
                 continue
             cust = p[1 : i + 1] + p[i + 1 : j + 1][::-1] + p[j + 1 : -1]
