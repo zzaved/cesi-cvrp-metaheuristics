@@ -396,7 +396,8 @@ pres.addSection({ title: "Three metaheuristics" });
         "Aspiration: a tabu move is allowed if it gives a new best plan.",
       ],
       idea: "Memory, not chance, drives it away from where it has been.",
-      tuned: "tenure 20  ·  200 candidates  ·  15 neighbors",
+      intr: "tenure 20 · 200 candidates · 15 neighbors; the candidate list is the fragile one",
+      extr: "time windows hurt it (extra trucks); no windows and large n favor it",
     },
     sa: {
       steps: [
@@ -407,7 +408,8 @@ pres.addSection({ title: "Three metaheuristics" });
         "T (temperature) falls from T₀ to T_f over the time budget: early it explores, at the end it only descends.",
       ],
       idea: "Chance, controlled by T, lets it accept worse plans early on.",
-      tuned: "T₀ = 0.005 × start cost  ·  T_f 0.005  ·  compiled (Numba)",
+      intr: "T₀ = 0.005 × start cost · T_f 0.005; robust, flat from 0.001 to 0.05",
+      extr: "needs time: a longer budget helps it most; large n starves it",
     },
     grasp: {
       steps: [
@@ -418,7 +420,8 @@ pres.addSection({ title: "Three metaheuristics" });
         "Time windows checked in O(1) per move (forward and backward time slack per route).",
       ],
       idea: "Good random starts, deep descents, kicks to escape.",
-      tuned: "α 0.3  ·  first improvement  ·  90 kicks (configured)",
+      intr: "α 0.3 · 90 kicks · 20 neighbors; the kicks matter most",
+      extr: "time windows favor it; at large n one iteration fills the budget",
     },
   };
   ["tabu", "sa", "grasp"].forEach((a, i) => {
@@ -428,18 +431,23 @@ pres.addSection({ title: "Three metaheuristics" });
     T(s, ALG[a].name, { x: x + 0.65, y: 1.55, w: 2.4, h: 0.42, fontFace: "Cambria", fontSize: 17, bold: true, valign: "middle" });
     T(s, ALG[a].who, { x: x + 2.95, y: 1.6, w: 0.8, h: 0.3, fontSize: 11, color: K.soft, align: "right" });
     d[a].steps.forEach((st, j) => {
-      const y = 2.08 + j * 0.74;
+      const y = 2.05 + j * 0.67;
       numDot(s, x + 0.18, y + 0.03, j + 1, ALG[a].color, 0.27);
-      T(s, st, { x: x + 0.55, y, w: 3.25, h: 0.72, fontSize: 10.5 });
+      T(s, st, { x: x + 0.55, y, w: 3.25, h: 0.66, fontSize: 10 });
     });
-    T(s, d[a].idea, { x: x + 0.2, y: 5.83, w: 3.55, h: 0.45, fontSize: 11, bold: true, italic: true, color: ALG[a].color });
-    T(s, d[a].tuned, { x: x + 0.2, y: 6.38, w: 3.55, h: 0.4, fontSize: 9.5, color: K.soft });
+    T(s, d[a].idea, { x: x + 0.2, y: 5.42, w: 3.55, h: 0.4, fontSize: 10.5, bold: true, italic: true, color: ALG[a].color });
+    seg(s, x + 0.2, 5.86, x + 3.7, 5.86, "E3DCCB", 0.75);
+    T(s, [{ text: "Intrinsic (we choose): ", options: { bold: true, color: K.navy } }, { text: d[a].intr, options: { color: K.soft } }],
+      { x: x + 0.2, y: 5.92, w: 3.55, h: 0.44, fontSize: 9.5 });
+    T(s, [{ text: "Extrinsic (the scenario): ", options: { bold: true, color: K.navy } }, { text: d[a].extr, options: { color: K.soft } }],
+      { x: x + 0.2, y: 6.38, w: 3.55, h: 0.44, fontSize: 9.5 });
   });
   s.addNotes(`Each author explains their own column in about 40 s; anyone must be able to explain all three.
 TABU (Pablo): starts from a nearest-neighbor plan. A neighborhood move changes the plan a little: relocate moves one customer, swap exchanges two, 2-opt reverses a piece of a route, 2-opt* exchanges the ends of two routes. Evaluating all moves at 1 000 customers is millions per step, so it samples 200, each near one of a customer's 15 closest neighbors. It takes the best one even if it is worse; to avoid undoing it right away, the customers it moved are tabu for 10 to 30 iterations (tenure 20, drawn at random to avoid cycles). Aspiration: a tabu move is still allowed if it beats the best plan ever found.
 SA (Dag): one random move per step. Delta is the change in cost; T, the temperature, is the tolerance for getting worse. Improvements are always accepted; a worse plan is accepted with probability e^(-Delta/T). Example: Delta = 5, T = 10 gives e^-0.5 = 61 %; T = 1 gives e^-5 = 0.7 %. T falls exponentially from T0 to Tf exactly over the time budget, so the search ends as a pure descent.
 GRASP-ILS (Farida): GRASP builds a plan by regret insertion (customers with few good options first) with randomness controlled by alpha (0 greedy, 1 random). Then a descent over six neighborhoods. ILS: a kick removes 10 to 20 % of the customers around a random one, reinserts them and descends again; the result is kept only if better. 90 kicks is the configured number; on large instances the first construction and descent already use the whole budget, so few or no kicks run (slides 11 to 14).
-Parameters were tuned on 6 instances never used in the test.`);
+Parameters were tuned on 6 instances never used in the test.
+Bottom of each column: INTRINSIC = the algorithm's own parameters, which we choose (studied one at a time on slide 16). EXTRINSIC = the scenario, which the algorithm does not choose: size, time windows, road network, budget, hour (slides 8 and 11 to 15). Tabu: candidate list is the fragile parameter; windows hurt it, no windows and large n favor it. SA: robust to temperature; needs time. GRASP-ILS: kicks matter most; windows favor it, large n makes one iteration fill the budget.`);
 }
 
 // ================================================================== 7. race animation
