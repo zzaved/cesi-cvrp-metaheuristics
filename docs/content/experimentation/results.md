@@ -96,7 +96,7 @@ the final notebook. Commands: `python experiments/scale_study.py homberger`, `..
 | 1 000, 120 s | 7.81 | 10.45 | 31.74 |
 
 *Interpretation:* GRASP-ILS leads at every size and budget; SA gains most from time (its gap halves
-from 20 to 120 s); Tabu Search's gap is mostly extra trucks (171 routes against 106 at 1 000).
+from 20 to 120 s); Tabu Search's gap is mostly extra trucks (175 routes against 107 at 1 000, 20 s).
 
 **10 000 customers** (uniform synthetic CVRP, 300 s, one run each)
 
@@ -108,20 +108,36 @@ from 20 to 120 s); Tabu Search's gap is mostly extra trucks (171 routes against 
 
 *Interpretation:* only Tabu Search scales to 10 000 customers within the budget, through its
 neighbor lists. A sweep at 1 000, 2 000 and 5 000 customers (60 s, `scale_study.py sweep`) places
-the limit of GRASP-ILS: one iteration takes 60 s at 2 000 and 125 s at 5 000 (twice the budget);
+the limit of GRASP-ILS: one construction plus its first descent takes about 2 s at 1 000,
+10 s at 2 000 and 133 s at 5 000 (budget 60 s; `scale_study.py grasp_start`);
 Tabu Search goes from 0.7 to 2.1 ms per iteration between 1 000 and 10 000 customers.
 
 **Real road networks** (999 customers, distance in km, mean of 5 seeds, 60 s)
 
 | City | GRASP-ILS | SA | Tabu Search |
 | --- | --- | --- | --- |
-| Paris | 360.9 | 420.7 | 334.9 |
-| São Paulo | 416.4 | 459.8 | 382.9 |
+| Paris | 325.1 | 420.7 | 334.9 |
+| São Paulo | 359.2 | 459.8 | 382.9 |
 
-*Interpretation:* without windows, Tabu Search wins in both countries (about 30 000 iterations in
-60 s against one for GRASP-ILS); the ranking is the same in Paris and São Paulo. Against the best
-plan of all runs (Tabu Search, 300 s) the 60 s means are 6 to 7 % above for Tabu Search, 15 to 17 %
-for GRASP-ILS.
+*Interpretation:* without windows GRASP-ILS leads in both countries (3.3 % and 2.7 % above the best
+run, Tabu Search 6.4 % and 9.5 %, SA about 33 %); the ranking is the same in Paris and São Paulo.
+*Correction:* a first version reported Tabu Search ahead; the 2-opt of GRASP-ILS assumed a
+symmetric matrix and cycled on these one-way street matrices. Fixed (with a test) and rerun.
+
+**Real road networks with the time windows of the model** (999 customers, 120 min windows between
+08:00 and 18:00, 5 min of service, 60 s, 5 seeds; `city_study.py windows` and `city_pilot.py`)
+
+| Objective | GRASP-ILS | SA | Tabu Search |
+| --- | --- | --- | --- |
+| Free-flow travel time, % above the best run (Paris, São Paulo) | 2.9, 2.8 | 20.5, 23.2 | 7.2, 9.8 |
+| Duration with hourly traffic, 999 customers | 5.8, 7.9 | no traffic mode | 0.5, 0.8 |
+| Duration with hourly traffic, 300 customers (pilot size) | 3.1, 5.8 | no traffic mode | 0.9, 0.9 |
+
+*Interpretation:* with a static objective GRASP-ILS wins, with or without windows; with hourly
+traffic Tabu Search wins, because GRASP-ILS recomputes the exact duration of every candidate route
+(construction and descent 30.8 s against 1.9 s at 999 customers; `city_pilot.py timing`). Routes last about 6 h and cross several traffic periods.
+Recommendation for the ADEME pilot (windows and traffic): Tabu Search; for a static CVRPTW:
+GRASP-ILS.
 
 **Night** (duration with hourly traffic, Tabu Search): leaving at 22:00 instead of 08:00 cuts the
 total duration from 1 831 to 1 014 min in Paris (44.6 %) and from 1 511 to 850 min in São Paulo
