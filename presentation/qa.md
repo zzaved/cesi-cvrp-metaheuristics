@@ -13,7 +13,7 @@ c_ij^h = ρ_h c_ij. Traffic and waiting are inside z. (Slides 3 and 4.)
 
 **Where does ρ_h come from?**
 It is our assumption (peaks 1.75 to 1.80 at 7:00 to 9:00 and 17:00 to 19:00, 1.0 at night). The
-model only reads the matrix, so measured speeds change no equation. We say it on slide 18.
+model only reads the matrix, so measured speeds change no equation. We say it on slide 19.
 
 **Is your model the one your code optimizes?**
 Yes: `solve_tdvrptw` implements constraints (1) to (11) and matches the enumeration of every plan on
@@ -50,13 +50,21 @@ Rule fixed before the campaign: feasible on every run, then lowest mean gap, the
 instances times 10 seeds at 20 s: GRASP-ILS 1.16 %, SA 1.70 %, Tabu 3.98 %; Friedman p = 4e-13 and
 every Wilcoxon pair significant after Holm.
 
-**But Tabu wins in Paris and São Paulo. Is your choice wrong?**
-No, it depends on the scenario, and that is our recommendation (slide 17). With time windows the
-construction decides, and GRASP-ILS's regret insertion is the best start (it leads at every size up
-to 1 000). Without windows on 999 real customers, what decides is the number of improving moves
-per second: Tabu makes about 30 000 iterations in 60 s, GRASP-ILS one, and the control run shows
-its kicks never start (0, 10 and 30 kicks give the same cost). Against the best plan found (Tabu,
-300 s), Tabu at 60 s is 6 to 7 % above, GRASP-ILS 15 to 17 %, SA 29 to 34 %.
+**Who wins in Paris and São Paulo?**
+It depends on the objective. Without windows (km) and with windows (free-flow time), GRASP-ILS
+leads: about 3 % above the best run, Tabu Search 6 to 10 %, SA 20 to 34 %. With windows AND hourly
+traffic (the full model), Tabu Search leads: under 1 % above the best run at 300 and 999 customers,
+GRASP-ILS 3 to 8 %, because our GRASP-ILS recomputes the exact duration of every candidate route:
+one construction plus descent takes 30.8 s instead of 1.9 s at 999 customers (2.7 s instead of
+0.2 s at 300), so few perturbations fit in the minute.
+
+**Your first version said Tabu wins in the cities. What changed?**
+We found a bug in GRASP-ILS: its intra-route 2-opt computed the gain as if A to B cost the same as B
+to A. The city matrices are asymmetric (one-way streets), so the descent applied false improvements
+and cycled until a cap of 100 000 moves; one iteration took the whole minute. We fixed the gain
+(it now adds the reversed arcs), added a test that no applied move worsens the true cost, and
+redid every city run. A construction plus descent now takes about 2 s instead of the whole minute. Solomon, Homberger and the synthetic
+instances are symmetric, so those results do not change.
 
 **Is the comparison fair? SA is compiled.**
 Not perfectly, and we say it. Same machine, same evaluator, same wall clock budget, interleaved
@@ -64,16 +72,19 @@ jobs. Compilation favors SA, which still comes second on Solomon.
 
 **How were the parameters chosen?**
 Grid on 6 tuning instances never used in the test (9 to 12 settings each, 2 seeds). Then a one
-factor at a time sensitivity study per algorithm, 3 seeds, around the tuned value (slide 16).
+factor at a time sensitivity study per algorithm, 3 seeds, around the tuned value (slide 17).
 
 **What is the limit of each algorithm?** (the professor's own words)
 - Tabu Search: the number of trucks with time windows. At 1 000 customers and 20 s it uses 175
-  trucks against 107 for GRASP-ILS (60 % more) and its moves rarely empty a route: 37 % gap at 1 000, 20 s. Without windows
-  it is the best, up to 10 000 customers (18.6 % above a lower bound).
-- SA: time. 6 times more time halves its gap at 1 000 customers (21.8 % to 10.5 %), the largest
+  trucks against 107 for GRASP-ILS (60 % more) and its moves rarely empty a route: 37 % gap at 1 000, 20 s. With
+  hourly traffic, and beyond 2 000 customers without windows, its cheap iterations make it the best
+  (18.6 % above a lower bound at 10 000).
+- SA: time. 6 times more time halves its gap at 1 000 customers (21.8 % to 10.4 %), the largest
   gain of the three; at 10 000 customers 14 million moves leave it 84 % above the lower bound.
-- GRASP-ILS: time per iteration. At 800 customers and more, one construction plus descent takes the
-  whole budget, so the multi-start and the kicks never happen.
+- GRASP-ILS: time per iteration. At 1 000 customers one construction plus descent takes about 2 s
+  and the perturbations fill the rest, so there is no second construction; at 5 000 the
+  construction and descent alone take 133 s. With hourly traffic its construction and descent
+  are about 15 times slower (30.8 s against 1.9 s at 999 customers).
 - At 10 000 customers GRASP-ILS returns nothing: after 684 s its first iteration had not ended.
 
 ## Scale and real world
@@ -84,8 +95,21 @@ the same area and the same number of customers. Cairo would need our own OSM ext
 could not validate in time. We kept the protocol identical so the comparison is valid; Brazil is,
 like Egypt, an emerging megacity with a less regular network (circuity 1.65 against 1.51).
 
+**You designed time windows. Why not use them in Paris and São Paulo?**
+We did, after the review. load_city(time_windows=True) applies the same rule to both cities: depot
+open 08:00 to 18:00, one 120 min window per customer starting at a uniform time, 5 min of service,
+and no window closes before a truck leaving at 08:00 at peak traffic can reach it, so every customer
+is reachable alone. Results on slide 15: GRASP-ILS wins the CVRPTW with free-flow times; Tabu
+Search wins the full model with hourly traffic. With windows the routes last about 6 h and cross
+several traffic periods, the multi-hour test the night experiment could not give.
+
+**Which algorithm for the ADEME pilot?**
+Tabu Search: the pilot has windows and hourly traffic, and on the full model with 300 real
+customers Tabu Search is under 1 % above the best run in both cities, GRASP-ILS 3 to 6 %. For a
+static CVRPTW (distance or free-flow time), GRASP-ILS.
+
 **Why does one algorithm do better in one city?**
-The ranking is the same in both cities (Tabu, GRASP-ILS, SA). São Paulo has longer, more circuitous
+The ranking is the same in both cities for every objective. São Paulo has longer, more circuitous
 trips at a higher mean speed, which raises every cost but does not change which search is best.
 
 **What happens at night?**
@@ -114,15 +138,19 @@ per run on an 8 GB laptop, so one run at a time).
 
 ## Questions raised by our own strict review
 
-**Your 300 s runs beat your best run. What are the real gaps in Paris?**
-Against the best of all runs (Tabu, 300 s, 314.8 km): Tabu at 60 s 6.4 %, GRASP-ILS 14.7 %, SA
-33.6 %; São Paulo 7.3 %, 16.7 %, 28.9 %.
+**What are the gaps in the cities, against what?**
+Against the best plan of all runs of that objective (all algorithms, seeds and budgets). Without
+windows (km): GRASP-ILS 3.3 % (Paris) and 2.7 % (São Paulo), Tabu Search 6.4 % and 9.5 %, SA 34 %
+and 32 %. With windows (free-flow time): GRASP-ILS 2.9 % and 2.8 %, Tabu 7.2 % and 9.8 %, SA 20.5 %
+and 23.2 %. Full model with traffic, 999 customers: Tabu 0.5 % and 0.8 %, GRASP-ILS 5.8 % and 7.9 %.
 
 **Where exactly does GRASP-ILS stop returning a plan?**
-Without windows, budget 60 s: it finishes one iteration in 60 s at 1 000 and 2 000 customers, in
-125 s at 5 000 (twice the budget), and had not finished after 684 s at 10 000. So it stops meeting
-its budget between 2 000 and 5 000, and stops returning a plan at all between 5 000 and 10 000. Its
-iteration time grows faster than n². Tabu Search: 0.7 ms per iteration at 1 000, 2.1 ms at 10 000.
+Without windows, budget 60 s. An iteration is a construction, a descent and up to 90
+perturbations, and the clock is read between perturbations. The construction plus first descent
+takes about 2 s at 1 000 customers, 10 s at 2 000, 133 s at 5 000 and more than 684 s at
+10 000. So it stops meeting its budget between 2 000 and
+5 000, and stops returning a plan at all between 5 000 and 10 000. Tabu Search: 0.7 ms per
+iteration at 1 000, 2.1 ms at 10 000.
 
 **The sensitivity shows tenure 35 and α 0.7 are better. Why not retune?**
 The test campaign was fixed with the tuned values before the study. The gains (0.6 and 0.3 points
@@ -139,7 +167,7 @@ assumption in both, so no traffic conclusion is country specific. Density, degre
 need the graphs, which the RRNCO matrices do not include.
 
 **Your solver ran 684 s on a 300 s budget. Acceptable?**
-No. GRASP-ILS reads its clock only between iterations and kicks; at 10 000 customers one iteration is
+No. GRASP-ILS reads its clock only between iterations and perturbations; at 10 000 customers one iteration is
 longer than the budget. It is a defect of our implementation, and it is not fixed: every reported result comes from this
 original code. The proposed fix is to check the time inside the construction and the descent and
 return the best partial plan completed by a greedy insertion; it was not implemented or run.
@@ -211,7 +239,7 @@ returns arrival at the depot minus departure. The search itself does not change.
 
 **What does GRASP stand for, and what is one iteration?**
 Greedy Randomized Adaptive Search Procedure (Feo and Resende, 1995). One iteration is a
-randomized greedy construction, a local search, then 90 kicks (the ILS part). The best feasible
+randomized greedy construction, a local search, then up to 90 perturbations (the ILS part). The best feasible
 plan over all iterations is returned.
 
 **How does the construction work?**
@@ -236,17 +264,23 @@ Each route stores its arrival times A (forward pass) and its latest feasible sta
 (backward pass, Savelsbergh 1992). A move is feasible if the new arrival at the next customer is
 at most its Z, so most moves are checked in O(1) without simulating the route again.
 
-**What is a kick?**
-Remove a cluster of 10 to 20 % of the customers (a random customer and its neighbors), reinsert
-them greedily (tight windows first), descend again, and keep the result only if it is better.
-Without kicks (plain GRASP) the gap doubles: 2.50 % against 1.34 %.
+**What is a kick? Is that really the name?**
+The standard name in iterated local search is a perturbation (Lourenço, Martin and Stützle, 2003).
+"Kick" is the older informal name of the same step, from the double-bridge move for the TSP
+(Martin, Otto and Felten, 1991); our code keeps it only in the parameter name perturb_kicks. Ours
+is a ruin and recreate move (Schrimpf et al., 2000): remove 10 to 20 % of the customers (a random
+one, its 20 nearest, then random ones), reinsert them tightest window first at their cheapest
+place, descend, and keep the result only if it is better and uses at most K trucks. Up to P = 90
+per iteration. Without perturbations (plain GRASP) the gap doubles: 2.50 % against 1.34 %.
 
 **What if the construction uses more trucks than allowed?**
 `_eliminate_routes` empties the smallest routes and reinserts their customers.
 
 **Its weakness?**
-Time per iteration. One construction plus descent takes about 60 s at 2 000 customers, and more
-than 684 s at 10 000. The clock is read only between iterations and kicks (a defect, not fixed; see above).
+Time per iteration. One construction plus descent takes about 2 s at 1 000 customers, 10 s at
+2 000, 133 s at 5 000 and more than 684 s at 10 000. The clock is read only
+between iterations and perturbations (a defect, not fixed; see above). With hourly traffic its
+construction and descent are about 15 times slower.
 
 ### Simulated Annealing (Dag, `src/cvrp/sa_static.py`, `src/cvrp/sa_vrptw.py`)
 
@@ -284,7 +318,7 @@ It needs a number of moves proportional to n. At 10 000 customers, 14 million mo
 - Tabu Search: explores by accepting the best non-tabu move even if it is worse, and exploits
   with the best move of the sample and aspiration.
 - SA: explores at high temperature and exploits at low temperature.
-- GRASP-ILS: explores with the random RCL and the kicks, and exploits with the descent.
+- GRASP-ILS: explores with the random RCL and the perturbations, and exploits with the descent.
 
 **Which one is deterministic?**
 None. All three use a seed, and the same seed gives the same result. That is why every result is
@@ -369,33 +403,33 @@ same in both cities.
 
 **What is the difference?**
 Intrinsic parameters belong to the algorithm and we choose them: Tabu Search tenure, candidate list
-and neighbor list; SA initial temperature factor and final temperature; GRASP-ILS α, number of kicks
+and neighbor list; SA initial temperature factor and final temperature; GRASP-ILS α, number of perturbations P
 and neighbor list. Extrinsic parameters belong to the scenario and the algorithm does not choose
 them: number of customers, time windows or not, clustered or random customers, Euclidean or real
 road network, country, time budget, departure hour and traffic.
 
 **How did you study each?**
 Intrinsic: one factor at a time around the tuned value, others fixed, 6 tuning instances, 3 seeds
-× 20 s, mean gap to the best known value (slide 16, notebook 9.5). Extrinsic: one experiment per
+× 20 s, mean gap to the best known value (slide 17, notebook 9.5). Extrinsic: one experiment per
 factor, every algorithm with the same protocol: size (Homberger 400 to 1 000, synthetic up to
 10 000), windows (Homberger against synthetic and cities), class (Solomon C, R, RC), road network
 and country (Paris, São Paulo), budget (20, 60, 120 s), departure hour (08:00, 22:00).
 
 **Which intrinsic parameter matters most?**
 Tabu Search's candidate list: 25 candidates 20.0 %, 200 2.1 %, 800 7.9 %. Also its neighbor list
-(5: 11.9 %, 15: 2.1 %, 60: 23.3 %) and a tenure of 80 (13.3 %). GRASP-ILS: kicks (0: 2.50 %,
+(5: 11.9 %, 15: 2.1 %, 60: 23.3 %) and a tenure of 80 (13.3 %). GRASP-ILS: perturbations (P = 0: 2.50 %,
 90: 1.34 %). SA is flat between 0.55 and 0.83 % and breaks only when T₀ tends to 0 (2.13 %).
 
 **Which extrinsic factor changes the ranking?**
-Time windows. With windows GRASP-ILS wins at every size up to 1 000. Without windows Tabu Search
-ties it at 1 000 (synthetic) and wins from 2 000 and on both real road networks. Size alone
-widens the gaps; the budget changes the levels (SA gains most) but not the order; the country and
-the departure hour do not change the order.
+Two: hourly traffic and very large size. With a static objective (distance or free-flow time),
+GRASP-ILS wins with windows at every size up to 1 000 and on both real road networks, with and
+without windows. With hourly traffic on real roads (300 and 999 customers), Tabu Search wins. Without
+windows Tabu Search ties GRASP-ILS at 1 000 synthetic customers and wins from 2 000. The budget
+changes the levels (SA gains most), the country and the departure hour do not change the order.
 
 **Do the tuned intrinsic values still hold when the extrinsic factors change?**
 Not tested in general, and we say so: the tuning is at 100 customers. At 1 000 customers and more
-GRASP-ILS completes one or two iterations, so α and the number of kicks barely act; its result is
-the regret construction and one descent. For the scale study we kept Tabu at tenure 20 and 200
+GRASP-ILS completes one or two iterations, so α acts once and the perturbations do the rest. For the scale study we kept Tabu at tenure 20 and 200
 candidates and used an SA initial factor of 0.01 instead of 0.005.
 
 **One factor at a time misses interactions. Why not a full design?**
